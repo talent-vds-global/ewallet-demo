@@ -1,0 +1,10 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+infra/otel-collector/traces/*.jsonl
+infra/db-quality/reports/*.json
+otel/opentelemetry-javaagent.jar

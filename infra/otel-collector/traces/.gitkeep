@@ -1,0 +1,1 @@
+# otel-collector ghi traces.jsonl / logs.jsonl vào đây (bind mount). File .jsonl bị .gitignore.

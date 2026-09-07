@@ -1,0 +1,38 @@
+# otel-collector (contrib). Nhận OTLP từ các service, xuất song song:
+#  - file traces.jsonl  -> đầu vào cho Trace Analyzer
+#  - Jaeger             -> UI cho người xem
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+
+exporters:
+  file/traces:
+    path: /traces/traces.jsonl
+  file/logs:
+    path: /traces/logs.jsonl
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file/traces, otlp/jaeger]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file/logs]

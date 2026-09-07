@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package ewallet.payment.v2;
+
+option java_multiple_files = true;
+option java_package = "com.ewallet.payment.contract.grpc";
+option java_outer_classname = "PaymentProto";
+
+// gRPC nội bộ: ewallet-payment-order (client) -> ewallet-payment-business (server).
+// Dùng để chứng minh collector thu được context ngoài HTTP (rpc.service / rpc.method / attribute).
+service PaymentBusinessService {
+  rpc AuthorizePayment (AuthorizePaymentRequest) returns (AuthorizePaymentResponse);
+}
+
+message AuthorizePaymentRequest {
+  string order_id = 1;
+  string customer_id = 2;
+  string source_account_id = 3;
+  string dest_account_id = 4;
+  int64  amount = 5;          // minor units (đồng)
+  string currency = 6;        // LỖI #6: server hiện bỏ qua field này
+  string payment_type = 7;    // TOP_UP | BILL | P2P | REFUND
+  string partner_code = 8;    // rỗng nếu không qua đối tác
+}
+
+message AuthorizePaymentResponse {
+  string status = 1;          // AUTHORIZED | HELD | REJECTED
+  string reason_code = 2;     // vd LIMIT_EXCEEDED, INSUFFICIENT_FUNDS, MANUAL_REVIEW
+  int64  fee = 3;
+  string ledger_txn_id = 4;   // rỗng nếu chưa ghi sổ
+}

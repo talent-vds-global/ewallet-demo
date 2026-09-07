@@ -1,0 +1,22 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: partner-sim
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# Stage C: tinh chỉnh hành vi giả lập
+partner-sim:
+  latency-ms: 0
+  fail-rate: 0.0
+  timeout-rate: 0.0

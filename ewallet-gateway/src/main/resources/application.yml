@@ -1,0 +1,29 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ewallet-gateway
+  cloud:
+    gateway:
+      default-filters:
+        - AddRequestHeader=X-Gateway, ewallet-gateway
+      routes:
+        - id: mobileapp
+          uri: ${MOBILEAPP_URI:http://ewallet-business-customer-mobileapp:8081}
+          predicates:
+            - Path=/api/**
+        - id: orders-history
+          uri: ${ORDER_URI:http://ewallet-payment-order:8082}
+          predicates:
+            - Path=/orders/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway
+  endpoint:
+    health:
+      probes:
+        enabled: true

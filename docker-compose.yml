@@ -1,0 +1,178 @@
+# Demo App — hạ tầng + 6 service ewallet + partner-sim.
+#   docker compose --profile infra up -d      # chỉ Postgres + Kafka + otel-collector + Jaeger
+#   docker compose --profile all up --build   # toàn bộ (Stage B: boot + trace, chưa có nghiệp vụ)
+#
+# Host port các service ewallet dời sang dải 18xxx để tránh đụng cổng máy dev (8080...).
+# Trong mạng compose vẫn dùng cổng gốc (8080-8090, 9091, 9876).
+
+name: ewallet-demo
+
+x-otel-env: &otel-env
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=ewallet,deployment.environment=demo
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: otlp
+  JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
+
+services:
+  # ---------- Hạ tầng ----------
+  postgres:
+    image: postgres:16
+    profiles: ["infra", "all"]
+    environment:
+      POSTGRES_USER: ewallet
+      POSTGRES_PASSWORD: ewallet
+      POSTGRES_DB: postgres
+    ports: ["5432:5432"]
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ewallet -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.8.1
+    profiles: ["infra", "all"]
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports: ["29092:29092"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    profiles: ["infra", "all"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infra/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+      - ./infra/otel-collector/traces:/traces
+    ports: ["4317:4317", "4318:4318"]
+    depends_on: [jaeger]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    profiles: ["infra", "all"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports: ["16686:16686"]
+
+  # ---------- Service ewallet (Dockerfile ở giai đoạn B) ----------
+  ewallet-gateway:
+    build: ./ewallet-gateway
+    profiles: ["all"]
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: ewallet-gateway
+    ports: ["18080:8080"]
+    depends_on: [otel-collector, ewallet-business-customer-mobileapp]
+
+  ewallet-business-customer-mobileapp:
+    build: ./ewallet-business-customer-mobileapp
+    profiles: ["all"]
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: ewallet-business-customer-mobileapp
+    ports: ["18081:8081"]
+    depends_on: [otel-collector, ewallet-payment-order]
+
+  ewallet-payment-order:
+    build: ./ewallet-payment-order
+    profiles: ["all"]
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: ewallet-payment-order
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderdb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      GRPC_BUSINESS_TARGET: static://ewallet-payment-business:9091
+    ports:
+      - "18082:8082"
+      - "19082:9876"   # database-quality-library dashboard
+    volumes:
+      - ./infra/db-quality/reports:/reports
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  ewallet-payment-business:
+    build: ./ewallet-payment-business
+    profiles: ["all"]
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: ewallet-payment-business
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/paymentdb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      THIRDPARTY_BASE_URL: http://ewallet-third-party:8084
+    ports:
+      - "18083:8083"
+      - "19091:9091"
+      - "19083:9876"   # database-quality-library dashboard
+    volumes:
+      - ./infra/db-quality/reports:/reports
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  ewallet-third-party:
+    build: ./ewallet-third-party
+    profiles: ["all"]
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: ewallet-third-party
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/thirdpartydb
+      PARTNER_SIM_BASE_URL: http://partner-sim:8090
+      PARTNER_SIM_WS_URL: ws://partner-sim:8090/ws/partner
+    ports:
+      - "18084:8084"
+      - "19084:9876"   # database-quality-library dashboard
+    volumes:
+      - ./infra/db-quality/reports:/reports
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  ewallet-notification:
+    build: ./ewallet-notification
+    profiles: ["all"]
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: ewallet-notification
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/notifdb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "18085:8085"
+      - "19085:9876"   # database-quality-library dashboard
+    volumes:
+      - ./infra/db-quality/reports:/reports
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  partner-sim:
+    build: ./partner-sim
+    profiles: ["all"]
+    environment:
+      <<: *otel-env
+      OTEL_SERVICE_NAME: partner-sim
+    ports: ["18090:8090"]
+    depends_on: [otel-collector]
+
+volumes:
+  pgdata:

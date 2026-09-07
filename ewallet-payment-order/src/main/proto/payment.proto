@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package ewallet.payment.v2;
+
+option java_multiple_files = true;
+option java_package = "com.ewallet.payment.contract.grpc";
+option java_outer_classname = "PaymentProto";
+
+// Bản sao của demo-app/contracts/proto/payment.proto (mô hình đa repo — mỗi repo giữ bản riêng).
+// Đồng bộ bằng: contracts/sync-proto.(sh|ps1)
+service PaymentBusinessService {
+  rpc AuthorizePayment (AuthorizePaymentRequest) returns (AuthorizePaymentResponse);
+}
+
+message AuthorizePaymentRequest {
+  string order_id = 1;
+  string customer_id = 2;
+  string source_account_id = 3;
+  string dest_account_id = 4;
+  int64  amount = 5;
+  string currency = 6;
+  string payment_type = 7;
+  string partner_code = 8;
+}
+
+message AuthorizePaymentResponse {
+  string status = 1;
+  string reason_code = 2;
+  int64  fee = 3;
+  string ledger_txn_id = 4;
+}
