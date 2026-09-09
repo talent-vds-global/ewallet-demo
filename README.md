@@ -71,6 +71,7 @@ business 18083 + gRPC 19091, third-party 18084, notification 18085, partner-sim 
 
 | Dashboard | Địa chỉ | Xem gì |
 |---|---|---|
+| **Demo Console** | <http://localhost:18000> | Giao diện bấm chạy các flow, xem số dư, các bước saga và kịch bản 6 lỗi cài sẵn |
 | Jaeger | <http://localhost:16686> | Trace từng giao dịch, span path qua các service |
 | Kafka console | <http://localhost:18086> | Topic, message, consumer group, DLT |
 | Adminer | <http://localhost:18087> | Truy vấn 4 database (server `postgres`, user/pass `ewallet`) |

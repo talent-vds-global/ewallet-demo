@@ -179,6 +179,14 @@ services:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
 
+  # ---------- Frontend demo (tinh, khong build step) ----------
+  frontend:
+    build: ./frontend
+    profiles: ["all"]
+    ports: ["18000:80"]
+    depends_on: [ewallet-gateway]
+    mem_limit: 64m
+
   # ---------- Cong cu quan sat (nhe, chi de xem du lieu) ----------
   kafka-console:
     image: docker.redpanda.com/redpandadata/console:v2.7.2
