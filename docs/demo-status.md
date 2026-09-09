@@ -81,10 +81,25 @@ Orchestrator saga — service đầu tiên có API HTTP nghiệp vụ thật.
 
 **Lỗi có chủ đích #4 đã cài** ở `history/OrderHistoryService` — vòng lặp query + thiếu index.
 
+### ✅ `ewallet-third-party` + `partner-sim` (xong, đã chạy thật)
+
+Ranh giới ra hệ ngoài — mở khoá F1, F2 và lỗi #6.
+
+| Thành phần | Nội dung |
+|---|---|
+| `third-party` migration | `V2__business.sql` — `service_type`, `bill_code`, `attempt`, `fail_reason` |
+| Adapter | `TopupAdapter` · `BillAdapter` · `TelcoAdapter`, chọn theo `partner_config.service_type`; mỗi loại có kiểm tra riêng |
+| Gọi đối tác | `PartnerSimClient` — timeout 3.000ms, thử lại 1 lần **chỉ khi quá hạn** (bị từ chối thì không gọi lại) |
+| WebSocket | `PartnerWsClient` — kênh bền, gửi `WATCH` sau khi đối tác nhận lệnh, nhận `SETTLEMENT` rồi điền `settled_at` |
+| API | `POST /api/thirdparty/execute` · `POST /api/thirdparty/bill-inquiry` · `GET /api/thirdparty/transactions/{orderId}` · `GET /api/thirdparty/ping` |
+| `partner-sim` | Hành vi **tất định** theo số tiền (đuôi 999 từ chối, đuôi 888 treo 5s), hoá đơn EVN in-memory, WebSocket đẩy `SETTLEMENT` sau ~300ms |
+
+**Lỗi có chủ đích #6 đã tái hiện qua HTTP thật**: 15.000 USD (= 375 triệu) được duyệt với
+`amountVnd = 15000`. **#3**: `TopupAdapter` đã có, phần "không test" thuộc Stage E.
+
 ### ⬜ Còn lại của Stage C
 
-`third-party` (adapter + WebSocket + lỗi #3) · `notification` (outbox + SSE + retry/DLT) ·
-`mobileapp` (BFF) · `partner-sim` (hành vi tất định). `gateway` đã có route, chưa cần sửa thêm.
+Chỉ còn `notification` (outbox + SSE + retry/DLT) để hoàn tất F5.
 
 ## ⛔ Chưa làm (Stage C trở đi)
 

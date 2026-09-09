@@ -68,7 +68,7 @@ public class ThirdPartyClient {
 
         } catch (ResourceAccessException e) {
             long elapsed = System.currentTimeMillis() - start;
-            boolean timeout = e.getCause() instanceof SocketTimeoutException;
+            boolean timeout = isTimeout(e);
             log.warn("goi third-party that bai orderId={} timeout={} loi={}", orderId, timeout, e.toString());
             return new PartnerExecutionResult(
                     timeout ? PartnerExecutionResult.TIMEOUT : PartnerExecutionResult.DECLINED,
@@ -77,10 +77,30 @@ public class ThirdPartyClient {
 
         } catch (RestClientException e) {
             long elapsed = System.currentTimeMillis() - start;
+            // Doc timeout hay xay ra luc trich body, luc do bi boc thanh RestClientException.
+            // Neu chi bat ResourceAccessException thi "khong tra loi" bi bao nham thanh "tu choi".
+            if (isTimeout(e)) {
+                log.warn("third-party qua han khi doc phan hoi orderId={}", orderId);
+                return new PartnerExecutionResult(PartnerExecutionResult.TIMEOUT,
+                        ReasonCodes.PARTNER_TIMEOUT, "", elapsed);
+            }
             log.warn("third-party tra loi orderId={} loi={}", orderId, e.toString());
             return new PartnerExecutionResult(PartnerExecutionResult.DECLINED,
                     ReasonCodes.PARTNER_DECLINED, "", elapsed);
         }
+    }
+
+    /** Timeout co the nam sau vai lop boc, nen phai duyet het chuoi cause. */
+    private static boolean isTimeout(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof SocketTimeoutException) {
+                return true;
+            }
+            if (t.getCause() == t) {
+                break;
+            }
+        }
+        return false;
     }
 
     /** Bước F2 S0 — tra cứu hoá đơn, chỉ đọc, không ghi sổ. */

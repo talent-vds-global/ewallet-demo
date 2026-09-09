@@ -80,7 +80,7 @@ PHẦN 3 — TEST & DEMO
 |---|---|---|---|---|
 | `R-LIMIT-01` = 50.000.000đ | `payment.domain.LimitPolicy.DAILY_TRANSFER_LIMIT` = **100.000.000** | **#1** | ✅ đã cài | Doc Indexer (rule) ↔ Code Indexer (hằng số) ↔ DB `limit_config` |
 | `R-REVIEW-01` + `R-EVENT-01` | `payment.service.PaymentService.authorize()` — nhánh `HELD` `return` mà không gọi `publishHeld()` | **#2** | ✅ đã cài | Trace: nhánh HELD không có span `publish` |
-| F1 đường `TOP_UP` | `thirdparty.partner.TopupAdapter` + nhánh `TOP_UP` | **#3** | ⬜ chờ third-party | JaCoCo coverage = 0 ↔ `FlowObservation` tồn tại |
+| F1 đường `TOP_UP` | `thirdparty.partner.TopupAdapter` | **#3** | 🔶 lớp đã có, cố ý không viết test ở Stage E | JaCoCo coverage = 0 ↔ `FlowObservation` tồn tại |
 | `R-HIST-06`, `R-HIST-07`, `NFR-DB-01` | `order.history.OrderHistoryService.history()` — vòng lặp `findByOrderIdOrderByCreatedAtAsc` theo từng đơn, không index trên `order_steps.order_id` | **#4** | ✅ đã cài | `database-quality-library`: `N_PLUS_ONE` + `MISSING_INDEX`; hoặc `pg_stat_user_tables.seq_scan` |
 | `NFR-LAT-01` < 500ms | `payment.domain.ReviewPolicy.runManualReviewScreening()` — `Thread.sleep(700)` | **#5** | ✅ đã cài | `SpanStat.p95` ↔ `NFRConstraint` |
 | `R-CURRENCY-01`, `R-FX-01` | `payment.grpc.PaymentBusinessGrpcService.authorizePayment()` — gán cứng `currency = "VND"` | **#6** | ✅ đã cài | Attribute span gRPC ↔ rule ↔ cột `amount_vnd` |

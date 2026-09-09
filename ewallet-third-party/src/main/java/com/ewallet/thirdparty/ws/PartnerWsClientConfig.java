@@ -1,15 +1,15 @@
 package com.ewallet.thirdparty.ws;
 
+import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.socket.client.WebSocketClient;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 
-/**
- * Stage B: chỉ khai báo bean client. Kết nối WebSocket bền tới partner-sim + HTTP adapter
- * cài ở Stage C (dùng PARTNER_SIM_WS_URL / PARTNER_SIM_BASE_URL).
- */
+/** Hai kênh ra đối tác: HTTP cho lệnh, WebSocket cho xác nhận quyết toán. */
 @Configuration
 public class PartnerWsClientConfig {
 
@@ -18,9 +18,20 @@ public class PartnerWsClientConfig {
         return new StandardWebSocketClient();
     }
 
+    /**
+     * NFR-TIMEOUT-01: chờ đối tác tối đa 3000ms.
+     * Quá hạn thì {@code PartnerSimClient} đổi thành TIMEOUT để phân biệt với bị từ chối.
+     */
     @Bean
-    RestClient partnerRestClient(@org.springframework.beans.factory.annotation.Value(
-            "${partner-sim.base-url:http://partner-sim:8090}") String baseUrl) {
-        return RestClient.builder().baseUrl(baseUrl).build();
+    RestClient partnerRestClient(@Value("${partner-sim.base-url:http://partner-sim:8090}") String baseUrl,
+                                 @Value("${partner.timeout-ms:3000}") long timeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(timeoutMs));
+        factory.setReadTimeout(Duration.ofMillis(timeoutMs));
+
+        return RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(factory)
+                .build();
     }
 }

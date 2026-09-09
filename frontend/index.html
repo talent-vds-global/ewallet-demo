@@ -114,11 +114,12 @@
       <section class="card tabpanel" data-panel="topup">
         <header class="card-head">
           <h2>Nạp tiền qua đối tác <span class="flow-tag">F1</span></h2>
-          <span class="pill pill-wait">chờ third-party</span>
+          <span class="pill pill-ok">sẵn sàng</span>
         </header>
         <p class="hint">
-          Cần <code>ewallet-third-party</code> và <code>partner-sim</code> (chưa code).
-          Bấm vẫn gọi thật — sẽ trả lỗi ở bước gọi đối tác, đó là hành vi đúng của saga.
+          Đủ 6 service: gateway → BFF → order → business → third-party → partner-sim → Kafka.
+          Số tiền đuôi 999 thì đối tác từ chối, đuôi 888 thì đối tác treo quá hạn — cả hai đều
+          kích hoạt nhánh bù trừ và tiền được hoàn lại.
         </p>
 
         <div class="form-row">
@@ -152,8 +153,12 @@
       <section class="card tabpanel" data-panel="bill">
         <header class="card-head">
           <h2>Hoá đơn &amp; nạp điện thoại <span class="flow-tag">F2</span></h2>
-          <span class="pill pill-wait">chờ third-party</span>
+          <span class="pill pill-ok">sẵn sàng</span>
         </header>
+        <p class="hint">
+          Hoá đơn <code>PE0123456789</code> là 1.250.000đ, phí 5.000đ.
+          <code>PE0000000000</code> không tồn tại. Tra cứu xong mới thanh toán được.
+        </p>
 
         <h3 class="sub-head">Thanh toán hoá đơn điện</h3>
         <div class="form-row">
@@ -241,8 +246,8 @@
           <button id="bug4" class="btn btn-warn">Tạo 15 đơn rồi đo</button>
         </div>
 
-        <div class="bug" data-ready="0">
-          <div class="bug-head"><strong>#6 — gRPC bỏ qua currency</strong><span class="pill pill-wait">chờ third-party</span></div>
+        <div class="bug" data-ready="1">
+          <div class="bug-head"><strong>#6 — gRPC bỏ qua currency</strong><span class="pill pill-ok">chạy được</span></div>
           <p>15.000 USD (= 375 triệu) bị tính như 15.000đ nên lọt mọi hạn mức.</p>
           <button id="bug6" class="btn btn-warn">Thanh toán 15.000 USD</button>
         </div>
