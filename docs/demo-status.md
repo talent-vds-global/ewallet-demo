@@ -66,10 +66,25 @@ Service business rule + sổ cái. `mvn package` chạy sạch (60 file, kể c�
 | #5 vi phạm NFR < 500ms | `domain/ReviewPolicy.java` — `Thread.sleep(700)` |
 | #6 gRPC bỏ qua `currency` | `grpc/PaymentBusinessGrpcService.java` — gán cứng `currency = "VND"` |
 
+### ✅ `ewallet-payment-order` (xong, đã compile và chạy thật)
+
+Orchestrator saga — service đầu tiên có API HTTP nghiệp vụ thật.
+
+| Thành phần | Nội dung |
+|---|---|
+| Migration | `V2__business.sql` — cột saga cho `payment_orders`, `attempt`/`duration_ms` cho `order_steps`, unique index idempotency key. **Cố ý không index** `customer_id` và `order_steps.order_id` |
+| Saga | `PaymentSagaOrchestrator` — S1 CREATE_ORDER → S2 AUTHORIZE → S3 PARTNER_EXECUTE (bỏ qua nếu không có `partnerCode`) → S4 CONFIRM, retry 3 lần; nhánh S3' COMPENSATE |
+| gRPC client | `PaymentBusinessClient` — 5 RPC, có deadline riêng cho nhánh gọi đối tác |
+| API | `POST /api/orders` · `GET /api/orders/{id}` · `GET /api/orders/history` · `GET /api/orders/bill-inquiry` · `POST /api/orders/{id}/refund` · `GET /api/orders/ping` |
+| Kafka | `OrderStatusListener` — consumer group `order-status-cg`, idempotent theo `eventId`, không ghi đè trạng thái kết thúc |
+| Dấu vết | `SagaStepRecorder` ghi `order_steps` bằng `REQUIRES_NEW` để dấu vết còn lại kể cả khi rollback |
+
+**Lỗi có chủ đích #4 đã cài** ở `history/OrderHistoryService` — vòng lặp query + thiếu index.
+
 ### ⬜ Còn lại của Stage C
 
-`payment-order` (saga + lỗi #4) · `third-party` (adapter + WebSocket + lỗi #3) ·
-`notification` (outbox + SSE + retry/DLT) · `mobileapp` (BFF) · `gateway` (route) · `partner-sim` (hành vi tất định).
+`third-party` (adapter + WebSocket + lỗi #3) · `notification` (outbox + SSE + retry/DLT) ·
+`mobileapp` (BFF) · `partner-sim` (hành vi tất định). `gateway` đã có route, chưa cần sửa thêm.
 
 ## ⛔ Chưa làm (Stage C trở đi)
 

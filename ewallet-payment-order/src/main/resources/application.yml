@@ -28,6 +28,10 @@ grpc:
       address: ${GRPC_BUSINESS_TARGET:static://ewallet-payment-business:9091}
       negotiation-type: plaintext
 
+app:
+  kafka:
+    payment-events-topic: ewallet.payment.events
+
 management:
   endpoints:
     web:
