@@ -2,6 +2,7 @@
 
 > Stage B = khung chạy được: 7 service boot, nói chuyện với nhau đủ mọi giao thức, sinh trace/log/DB-metrics.
 > **Chưa có** business logic thật và 6 lỗi có chủ đích (đó là Stage C).
+> Spec nghiệp vụ F1–F6 + sequence diagram + hướng dẫn chạy local: **đã xong** (Stage D) — xem [`specs/`](specs/README.md) và [`local-run.md`](local-run.md).
 
 ## ✅ Đang chạy được
 
@@ -39,6 +40,37 @@
 - **Swagger UI** mỗi service HTTP: `http://localhost:1808x/swagger-ui.html` (18081–18085, 18090).
 - **OpenAPI JSON**: `/v3/api-docs`.
 
+## 🔄 Stage C — đang làm
+
+### ✅ `ewallet-payment-business` (xong, đã compile)
+
+Service business rule + sổ cái. `mvn package` chạy sạch (60 file, kể cả protobuf sinh ra).
+
+| Thành phần | Nội dung |
+|---|---|
+| Migration | `V2__business.sql` (bảng `payment_transactions`, `fx_rates`, cột `entry_type`/`status` cho `ledger_entries`) · `V900__seed_demo.sql` · `V901__seed_fx.sql` |
+| Domain | `LimitPolicy`, `ReviewPolicy`, `FeePolicy`, `CurrencyConverter`, `PaymentType`, `ReasonCodes` |
+| Sổ cái | `LedgerService` — authorize (PENDING) / capture (POSTED) / reverse (bút toán ngược, txn_id mới) |
+| gRPC | `PaymentBusinessGrpcService` — đủ 5 method `AuthorizePayment` · `ExecutePartnerPayment` · `ConfirmPayment` · `ReversePayment` · `InquireBill` |
+| Nghiệp vụ | `PaymentService` — saga phía business, áp đủ R-ACCOUNT / R-AMOUNT / R-LIMIT / R-BALANCE / R-REVIEW / R-FEE / R-LEDGER / R-USAGE |
+| Ra ngoài | `ThirdPartyClient` (HTTP → third-party, quy mọi sự cố về DECLINED/TIMEOUT) |
+| Kafka | `PaymentEventPublisher` — `PaymentCompleted` / `PaymentFailed` / `PaymentRefunded`, key = orderId |
+| HTTP admin | `AdminController` — `/admin/ping` `/admin/limits` `/admin/accounts/{id}/balance` `/admin/transactions/{orderId}` |
+
+**Lỗi có chủ đích đã cài (3/6 nằm ở service này, cộng #1 là 4):**
+
+| Lỗi | Vị trí chính xác |
+|---|---|
+| #1 spec drift hạn mức | `domain/LimitPolicy.java` — `DAILY_TRANSFER_LIMIT = 100_000_000` |
+| #2 nhánh HELD quên publish | `service/PaymentService.java` — nhánh `requiresManualReview` return không gọi `publishHeld()` |
+| #5 vi phạm NFR < 500ms | `domain/ReviewPolicy.java` — `Thread.sleep(700)` |
+| #6 gRPC bỏ qua `currency` | `grpc/PaymentBusinessGrpcService.java` — gán cứng `currency = "VND"` |
+
+### ⬜ Còn lại của Stage C
+
+`payment-order` (saga + lỗi #4) · `third-party` (adapter + WebSocket + lỗi #3) ·
+`notification` (outbox + SSE + retry/DLT) · `mobileapp` (BFF) · `gateway` (route) · `partner-sim` (hành vi tất định).
+
 ## ⛔ Chưa làm (Stage C trở đi)
 
 - Business logic thật: transfer / top-up / bill / P2P / refund, saga nhiều bước, state machine, tính phí, ghi sổ kép, check hạn mức & ngưỡng.
@@ -47,6 +79,6 @@
 - business publish event thật lên Kafka; DLT + phân loại retry.
 - third-party mở WebSocket bền + adapter theo `partner_code`.
 - notification ghi `notification_outbox` + đẩy SSE khi có event thật.
-- 5 flow F1–F5 chạy end-to-end.
-- Spec nghiệp vụ (Stage D) + test suite & coverage (Stage E).
+- 6 flow F1–F6 chạy end-to-end (spec đã có ở `specs/`, code là Stage C).
+- Test suite & coverage (Stage E).
 - 3 collector (Code Indexer / Doc Indexer / Trace Analyzer) + db-quality-collector — nằm ở `../collectors/`, chưa bắt đầu.

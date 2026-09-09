@@ -19,6 +19,8 @@ spring:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
     producer:
       acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
       properties:
         enable.idempotence: true
 
@@ -28,6 +30,9 @@ grpc:
 
 thirdparty:
   base-url: ${THIRDPARTY_BASE_URL:http://ewallet-third-party:8084}
+  # Rong hon NFR-TIMEOUT-01 (third-party goi doi tac 3000ms) de loi PARTNER_TIMEOUT
+  # duoc third-party phan loai chu khong bi cat som o day.
+  timeout-ms: ${THIRDPARTY_TIMEOUT_MS:5000}
 
 app:
   kafka:

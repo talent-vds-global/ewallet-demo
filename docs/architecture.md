@@ -36,7 +36,7 @@ cung cấp HTTP + WebSocket, cấu hình được latency / tỉ lệ lỗi. Cho
 
 ### Phủ giao thức
 - **HTTP REST**: 1, 2, 3, 4 (admin), 5 — *trọng tâm*
-- **gRPC**: 3 → 4 (`PaymentBusinessService.AuthorizePayment`)
+- **gRPC**: 3 → 4 (`PaymentBusinessService`: `AuthorizePayment`, `ExecutePartnerPayment`, `ConfirmPayment`, `ReversePayment`, `InquireBill`)
 - **Kafka (async)**: 4 → topic `ewallet.payment.events` → 6 (`notification-cg`) + 3 (`order-status-cg`)
 - **Kết nối dài**: 6 SSE `/api/notifications/stream`; 5 ↔ partner-sim WebSocket
 - **JDBC**: 3, 4, 5, 6
@@ -78,6 +78,10 @@ Trace Analyzer phải phân biệt `first_attempt | retry | dead_letter` để b
 | **F3 — Chuyển tiền P2P trong ví** | app → gateway → mobileapp → order → business (gRPC) → Kafka → notification | **Không** qua third-party → contrast nhánh; chạm lỗi #1 (hạn mức) |
 | **F4 — Giao dịch lỗi / hoàn tiền** | app → gateway → mobileapp → order → business → (fail) → nhánh compensation ở order → Kafka `PaymentFailed`/`PaymentRefunded` → notification | Nhánh bù trừ; đường test hay bỏ sót → test gap |
 | **F5 — Thông báo bất đồng bộ** | business → Kafka → notification (+ order-status) | Trace xuyên message queue, không chỉ HTTP; đuôi chung nhiều flow |
+| **F6 — Tra cứu lịch sử giao dịch** (flow đọc) | app → gateway → mobileapp → order → `orderdb` | Chỉ đọc, không qua business/Kafka; chứa lỗi #4 (N+1 + thiếu index) |
+
+> Spec chi tiết từng flow (Requirement + Design + sequence diagram Mermaid): [`specs/`](specs/README.md).
+> F6 tách ra từ dòng "flow đọc lịch sử" ở mục 6 để có rule/NFR riêng cho `database-quality-library`.
 
 **Impact analysis kỳ vọng:** sửa `payment-business` → cả F1–F5; sửa `third-party` → chỉ F1, F2;
 sửa `notification` → mọi flow nhưng chỉ nhánh đuôi; đổi event schema → notification + order-status.
@@ -175,8 +179,13 @@ demo-app/
   docs/
     architecture.md                ← file này
     collector-data-contract.md     ← dữ liệu 3 collector đổ vào Knowledge Graph
-    specs/                         ← tài liệu nghiệp vụ F1–F5 (đầu vào Doc Indexer)
-    diagrams/                      ← Mermaid: container + sequence mỗi flow
+    specs/                         ← tài liệu nghiệp vụ F1–F6 (đầu vào Doc Indexer)
+      README.md                    ← index + ma trận truy vết rule ↔ code ↔ lỗi
+      00-domain-and-conventions.md ← miền, quy ước, rule chung, schema đích, seed
+      01-api-contracts.md          ← REST / gRPC / Kafka / WebSocket / SSE
+      F1..F6-*.md                  ← mỗi flow: Requirement + Design + sequence diagram
+    diagrams/                      ← Mermaid: container, bản đồ flow, máy trạng thái
+    local-run.md                   ← 3 cách chạy local + kịch bản demo
     db-quality-integration.md      ← cách gắn database-quality-library vào 4 service DB
   contracts/proto/payment.proto    ← hợp đồng gRPC (order ↔ business)
   infra/
@@ -204,7 +213,7 @@ Không có parent pom chung; proto dùng chung qua `../contracts/proto`.
 |---|---|---|
 | A | Thiết kế + skeleton (docs, compose, infra, proto, README service) | ✅ |
 | B | Scaffold 7 Maven project: pom, main class, `application.yml`, Dockerfile, logback, Flyway. 4 service DB thêm `database-quality-library` + `application.properties`. Swagger (springdoc) cho service HTTP. Compile + boot + ra trace + dashboard db-quality lên, chưa có nghiệp vụ | ✅ (verify: `docs/stage-b-verify.md` · trạng thái: `docs/demo-status.md`) |
-| C | Business logic + 6 lỗi có chủ đích | ← tiếp theo |
-| D | Spec F1–F5 (Markdown) + diagram Mermaid | |
+| C | Business logic + 6 lỗi có chủ đích (code theo `docs/specs/`) | ← tiếp theo |
+| D | Spec F1–F6 (Markdown) + diagram Mermaid + hướng dẫn chạy local | ✅ (`docs/specs/`, `docs/diagrams/`, `docs/local-run.md`, `scripts/demo-flows.*`) |
 | E | Test suite + JaCoCo coverage report (cố ý bỏ test đường F1 top-up) | |
 | F | (nếu xin được service thật VDS) cài collector lên, tinh chỉnh dữ liệu thật | |

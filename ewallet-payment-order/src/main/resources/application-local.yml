@@ -1,0 +1,11 @@
+# Profile "local": chay service tu IDE/Maven, ha tang van trong Docker.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/orderdb
+  kafka:
+    bootstrap-servers: localhost:29092
+grpc:
+  client:
+    payment-business:
+      address: static://localhost:9091
+      negotiation-type: plaintext

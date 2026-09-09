@@ -20,6 +20,11 @@ partner-sim:
   base-url: ${PARTNER_SIM_BASE_URL:http://partner-sim:8090}
   ws-url: ${PARTNER_SIM_WS_URL:ws://partner-sim:8090/ws/partner}
 
+# NFR-TIMEOUT-01: timeout goi doi tac 3000ms, retry 1 lan (docs/specs/01-api-contracts.md §7.1)
+partner:
+  timeout-ms: ${PARTNER_TIMEOUT_MS:3000}
+  max-attempts: 2
+
 management:
   endpoints:
     web:
