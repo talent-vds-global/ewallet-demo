@@ -6,26 +6,110 @@ option java_multiple_files = true;
 option java_package = "com.ewallet.payment.contract.grpc";
 option java_outer_classname = "PaymentProto";
 
-// Bản sao của demo-app/contracts/proto/payment.proto (mô hình đa repo — mỗi repo giữ bản riêng).
-// Đồng bộ bằng: contracts/sync-proto.(sh|ps1)
+// gRPC nội bộ: ewallet-payment-order (client) -> ewallet-payment-business (server).
+// Dùng để chứng minh collector thu được context ngoài HTTP (rpc.service / rpc.method / attribute).
+//
+// Saga do payment-order điều phối (xem docs/specs/01-api-contracts.md §5):
+//   S2 AuthorizePayment  -> ap rule, tinh phi, giu tien (ledger PENDING)
+//   S3 ExecutePartnerPayment -> business goi third-party (chi F1/F2)
+//   S4 ConfirmPayment    -> chot so, publish PaymentCompleted
+//   S3' ReversePayment   -> bu tru khi buoc sau authorize that bai (F4)
+//   S0 InquireBill       -> tra cuu hoa don truoc khi thanh toan (F2)
 service PaymentBusinessService {
-  rpc AuthorizePayment (AuthorizePaymentRequest) returns (AuthorizePaymentResponse);
+  rpc AuthorizePayment      (AuthorizePaymentRequest)      returns (AuthorizePaymentResponse);
+  rpc ExecutePartnerPayment (ExecutePartnerPaymentRequest) returns (ExecutePartnerPaymentResponse);
+  rpc ConfirmPayment        (ConfirmPaymentRequest)        returns (ConfirmPaymentResponse);
+  rpc ReversePayment        (ReversePaymentRequest)        returns (ReversePaymentResponse);
+  rpc InquireBill           (InquireBillRequest)           returns (InquireBillResponse);
 }
+
+// ---------- S2 AUTHORIZE ----------
 
 message AuthorizePaymentRequest {
   string order_id = 1;
   string customer_id = 2;
   string source_account_id = 3;
   string dest_account_id = 4;
-  int64  amount = 5;
-  string currency = 6;
-  string payment_type = 7;
-  string partner_code = 8;
+  int64  amount = 5;             // minor units (đồng)
+  string currency = 6;           // LỖI #6: server hiện bỏ qua field này
+  string payment_type = 7;       // TOP_UP | BILL | TELCO | P2P
+  string partner_code = 8;       // rỗng nếu không qua đối tác
+  string dest_customer_id = 9;   // chỉ P2P
+  string bill_code = 10;         // chỉ BILL
+  string idempotency_key = 11;
 }
 
 message AuthorizePaymentResponse {
-  string status = 1;
-  string reason_code = 2;
+  string status = 1;             // AUTHORIZED | HELD | REJECTED
+  string reason_code = 2;        // vd LIMIT_EXCEEDED, INSUFFICIENT_FUNDS, MANUAL_REVIEW
   int64  fee = 3;
-  string ledger_txn_id = 4;
+  string ledger_txn_id = 4;      // rỗng nếu chưa ghi sổ
+  int64  amount_vnd = 5;         // sau quy đổi theo R-CURRENCY-01
+}
+
+// ---------- S3 PARTNER EXECUTE ----------
+
+message ExecutePartnerPaymentRequest {
+  string order_id = 1;
+  string txn_id = 2;
+  string partner_code = 3;
+  string payment_type = 4;
+  int64  amount = 5;
+  string currency = 6;
+  string account_ref = 7;        // số thẻ/tài khoản đối tác hoặc số thuê bao
+  string bill_code = 8;
+}
+
+message ExecutePartnerPaymentResponse {
+  string status = 1;             // SUCCESS | DECLINED | TIMEOUT
+  string reason_code = 2;        // OK | PARTNER_DECLINED | PARTNER_TIMEOUT
+  string partner_ref = 3;
+  int64  elapsed_ms = 4;
+}
+
+// ---------- S4 CONFIRM ----------
+
+message ConfirmPaymentRequest {
+  string order_id = 1;
+  string txn_id = 2;
+  string partner_ref = 3;        // rỗng nếu không qua đối tác
+}
+
+message ConfirmPaymentResponse {
+  string status = 1;             // CAPTURED | ERROR
+  string reason_code = 2;
+  int64  balance_after = 3;      // số dư ví khách sau khi chốt sổ
+}
+
+// ---------- S3' REVERSE (compensation) ----------
+
+message ReversePaymentRequest {
+  string order_id = 1;
+  string txn_id = 2;
+  string reason_code = 3;        // PARTNER_DECLINED | PARTNER_TIMEOUT | CONFIRM_FAILED | CUSTOMER_REQUEST
+}
+
+message ReversePaymentResponse {
+  string status = 1;             // REVERSED | ERROR
+  string reason_code = 2;
+  string refund_txn_id = 3;      // txn mới sinh ra khi bù trừ
+  int64  balance_after = 4;
+}
+
+// ---------- S0 INQUIRE BILL ----------
+
+message InquireBillRequest {
+  string partner_code = 1;
+  string bill_code = 2;
+  string customer_id = 3;
+}
+
+message InquireBillResponse {
+  string status = 1;             // FOUND | NOT_FOUND | ALREADY_PAID
+  string bill_code = 2;
+  string customer_name = 3;
+  string period = 4;
+  int64  amount = 5;
+  string currency = 6;
+  string bill_status = 7;        // UNPAID | PAID
 }

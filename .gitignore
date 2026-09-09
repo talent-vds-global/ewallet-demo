@@ -8,3 +8,6 @@ target/
 infra/otel-collector/traces/*.jsonl
 infra/db-quality/reports/*.json
 otel/opentelemetry-javaagent.jar
+
+# log khi chay service tu host (docs/local-run.md muc 2)
+run.log

@@ -1,0 +1,5 @@
+# Profile "local": chay service tu IDE/Maven, ha tang van trong Docker.
+#   mvn spring-boot:run -Dspring-boot.run.profiles=local
+MOBILEAPP_URI: http://localhost:8081
+ORDER_URI: http://localhost:8082
+NOTIFICATION_URI: http://localhost:8085

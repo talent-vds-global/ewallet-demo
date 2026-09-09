@@ -1,0 +1,4 @@
+# Profile "local": chay service tu IDE/Maven, ha tang van trong Docker.
+clients:
+  order:
+    base-url: http://localhost:8082

@@ -1,0 +1,7 @@
+# Profile "local": chay service tu IDE/Maven, ha tang van trong Docker.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/thirdpartydb
+partner-sim:
+  base-url: http://localhost:8090
+  ws-url: ws://localhost:8090/ws/partner
