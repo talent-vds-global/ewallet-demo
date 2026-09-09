@@ -6,3 +6,4 @@ spring:
     bootstrap-servers: localhost:29092
 thirdparty:
   base-url: http://localhost:8084
+  timeout-ms: 8000
