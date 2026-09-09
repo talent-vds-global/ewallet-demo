@@ -8,6 +8,17 @@ spring:
     gateway:
       default-filters:
         - AddRequestHeader=X-Gateway, ewallet-gateway
+      # Demo: frontend chay o origin khac (Vite 5173 hoac nginx 18000) nen can CORS.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns:
+              - "http://localhost:*"
+              - "http://127.0.0.1:*"
+            allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+            allowedHeaders: "*"
+            allowCredentials: false
+            maxAge: 3600
       # Thu tu route quan trong: route cu the dat TRUOC route /api/** fallback.
       routes:
         - id: notifications
@@ -24,6 +35,12 @@ spring:
             - Path=/orders/**
           filters:
             - RewritePath=/orders/(?<seg>.*), /api/orders/$\{seg}
+        # Endpoint noi bo cua payment-business. Khong phai duong khach hang -
+        # mo qua gateway de UI demo va Ops doc duoc so du, han muc, but toan.
+        - id: admin
+          uri: ${BUSINESS_URI:http://ewallet-payment-business:8083}
+          predicates:
+            - Path=/admin/**
         - id: mobileapp
           uri: ${MOBILEAPP_URI:http://ewallet-business-customer-mobileapp:8081}
           predicates:

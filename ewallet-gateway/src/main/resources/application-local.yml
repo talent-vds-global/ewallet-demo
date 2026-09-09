@@ -1,5 +1,11 @@
 # Profile "local": chay service tu IDE/Maven, ha tang van trong Docker.
+# Chay tren host: cong 8080 hay bi ung dung khac chiem, va dung 18080 thi frontend
+# chi can mot URL duy nhat cho ca che do Docker lan che do chay tu IDE.
+server:
+  port: 18080
+
 #   mvn spring-boot:run -Dspring-boot.run.profiles=local
 MOBILEAPP_URI: http://localhost:8081
 ORDER_URI: http://localhost:8082
 NOTIFICATION_URI: http://localhost:8085
+BUSINESS_URI: http://localhost:8083

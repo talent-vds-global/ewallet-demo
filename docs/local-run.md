@@ -177,7 +177,7 @@ bằng `host.docker.internal`; service **ở host** gọi vào Docker bằng `lo
 
 | Thành phần | Trong Docker | Host (cách 1) | Host (cách 2 — chạy IDE) |
 |---|---|---|---|
-| ewallet-gateway | 8080 | **18080** | 8080 |
+| ewallet-gateway | 8080 | **18080** | **18080** (cổng 8080 hay bị ứng dụng khác chiếm) |
 | mobileapp (BFF) | 8081 | **18081** | 8081 |
 | payment-order | 8082 | **18082** | 8082 |
 | payment-business HTTP | 8083 | **18083** | 8083 |
@@ -189,6 +189,7 @@ bằng `host.docker.internal`; service **ở host** gọi vào Docker bằng `lo
 | Kafka | 9092 (nội bộ) | **29092** | 29092 |
 | otel-collector | 4317 / 4318 | 4317 / 4318 | 4317 / 4318 |
 | Jaeger UI | 16686 | **16686** | 16686 |
+| Frontend Demo Console | 80 | **18000** | 18000 |
 | Kafka console (Redpanda) | 8080 | **18086** | 18086 |
 | Adminer (Postgres UI) | 8080 | **18087** | 18087 |
 | db-quality — order | 9876 | **19082** | 9876 |
@@ -237,6 +238,7 @@ Bản bash: `./scripts/demo-flows.sh <flow>` với cùng danh sách.
 
 | Thứ | Địa chỉ |
 |---|---|
+| **Demo Console** (bấm chạy flow) | <http://localhost:18000> |
 | **Jaeger UI** (xem trace) | <http://localhost:16686> |
 | **Kafka console** (xem topic, message, consumer group, DLT) | <http://localhost:18086> |
 | **Adminer** (truy vấn 4 database bằng UI) | <http://localhost:18087> — server `postgres`, user/pass `ewallet`/`ewallet` |
@@ -271,7 +273,35 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 
 ---
 
-## 7. Ngân sách RAM
+## 7. Frontend Demo Console
+
+Trang tĩnh, **không có bước build và không cần Node** — chỉ HTML/CSS/JS thuần.
+
+Chạy trong Docker (đi kèm profile `all`):
+
+```bash
+docker compose --profile all up -d frontend
+```
+
+Mở <http://localhost:18000>.
+
+Chạy khi phát triển, không cần Docker:
+
+```bash
+cd frontend
+python -m http.server 18000
+```
+
+Trang gọi thẳng gateway ở `http://localhost:18080` (sửa được ngay trên giao diện, ô "Gateway").
+Gateway đã bật CORS cho mọi origin `localhost:*` nên không cần proxy.
+
+Giao diện có sẵn: chọn khách hàng và xem số dư / hạn mức đã dùng, chạy chuyển tiền, nạp tiền,
+hoá đơn, telco, lịch sử, và 4 nút chạy thẳng kịch bản lỗi cài sẵn. Panel bên phải hiện
+mã HTTP, thời gian, các bước saga kèm thời lượng, và JSON gốc.
+
+Tốn ~15 MB RAM khi chạy bằng nginx trong Docker.
+
+## 8. Ngân sách RAM
 
 Đo thật trên máy 16 GB (Docker được cấp 7,4 GB):
 
@@ -316,7 +346,7 @@ processors=4
 
 Rồi `wsl --shutdown` và mở lại Docker Desktop.
 
-## 8. Reset dữ liệu demo
+## 9. Reset dữ liệu demo
 
 Số dư và `daily_usage` thay đổi sau mỗi lần chạy demo. Cách nhanh nhất để về trạng thái đầu:
 
@@ -338,7 +368,7 @@ docker compose exec postgres psql -U ewallet -d paymentdb -c "
 
 ---
 
-## 9. Sự cố hay gặp
+## 10. Sự cố hay gặp
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
@@ -355,7 +385,7 @@ docker compose exec postgres psql -U ewallet -d paymentdb -c "
 
 ---
 
-## 10. Sau khi sửa hợp đồng
+## 11. Sau khi sửa hợp đồng
 
 | Sửa gì | Phải làm gì thêm |
 |---|---|

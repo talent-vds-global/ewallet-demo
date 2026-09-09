@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ví điện tử — Demo Console</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">₫</span>
+    <div>
+      <h1>Ví điện tử — Demo Console</h1>
+      <p class="sub">Hệ thống được quan sát bởi platform AI Quality Control</p>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <label class="field compact">
+      <span>Gateway</span>
+      <input id="baseUrl" type="text" value="http://localhost:18080" spellcheck="false">
+    </label>
+    <span id="health" class="pill pill-muted">đang kiểm tra…</span>
+  </div>
+</header>
+
+<main>
+  <!-- ============================================ Khách hàng + số dư -->
+  <section class="card account-card">
+    <div class="account-pick">
+      <label class="field">
+        <span>Khách hàng</span>
+        <select id="customerId">
+          <option value="CUST-001">CUST-001 — Nguyễn Văn A</option>
+          <option value="CUST-002">CUST-002 — Trần Thị B</option>
+          <option value="CUST-003">CUST-003 — Lê Văn C (số dư lớn)</option>
+          <option value="CUST-004">CUST-004 — Phạm Thị D (số dư 50.000đ)</option>
+          <option value="CUST-DLQ">CUST-DLQ — Vũ Văn E (demo retry/DLT)</option>
+        </select>
+      </label>
+      <button id="refreshBalance" class="btn btn-ghost">Làm mới</button>
+    </div>
+
+    <div class="balance-grid">
+      <div class="stat">
+        <span class="stat-label">Số dư ví</span>
+        <strong id="balance" class="stat-value">—</strong>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Đã dùng hôm nay</span>
+        <strong id="dailyUsage" class="stat-value">—</strong>
+        <span id="limitHint" class="stat-hint"></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Trạng thái ví</span>
+        <strong id="accountStatus" class="stat-value">—</strong>
+      </div>
+    </div>
+  </section>
+
+  <div class="columns">
+    <!-- ============================================ Cột trái: thao tác -->
+    <div class="col-left">
+
+      <nav class="tabs" id="tabs">
+        <button class="tab is-active" data-tab="transfer">Chuyển tiền</button>
+        <button class="tab" data-tab="topup">Nạp tiền</button>
+        <button class="tab" data-tab="bill">Hoá đơn &amp; Telco</button>
+        <button class="tab" data-tab="history">Lịch sử</button>
+        <button class="tab" data-tab="bugs">Lỗi cài sẵn</button>
+      </nav>
+
+      <!-- ---------------------------------------- F3 -->
+      <section class="card tabpanel is-active" data-panel="transfer">
+        <header class="card-head">
+          <h2>Chuyển tiền P2P <span class="flow-tag">F3</span></h2>
+          <span class="pill pill-ok">sẵn sàng</span>
+        </header>
+        <p class="hint">gateway → BFF → order → business → Kafka. Không đi qua đối tác.</p>
+
+        <div class="form-row">
+          <label class="field">
+            <span>Người nhận</span>
+            <select id="tfDest">
+              <option value="CUST-002">CUST-002 — Trần Thị B</option>
+              <option value="CUST-001">CUST-001 — Nguyễn Văn A</option>
+              <option value="CUST-003">CUST-003 — Lê Văn C</option>
+              <option value="CUST-004">CUST-004 — Phạm Thị D</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Số tiền (đ)</span>
+            <input id="tfAmount" type="number" value="150000" min="1" step="1000">
+          </label>
+        </div>
+        <label class="field">
+          <span>Lời nhắn</span>
+          <input id="tfMessage" type="text" value="tra tien ca phe" maxlength="120">
+        </label>
+
+        <div class="quick">
+          <span>Nhanh:</span>
+          <button class="chip" data-amount="150000">150k · miễn phí</button>
+          <button class="chip" data-amount="3000000">3tr · phí 2.200đ</button>
+          <button class="chip" data-amount="25000000">25tr · treo duyệt</button>
+        </div>
+
+        <button id="btnTransfer" class="btn btn-primary">Chuyển tiền</button>
+      </section>
+
+      <!-- ---------------------------------------- F1 -->
+      <section class="card tabpanel" data-panel="topup">
+        <header class="card-head">
+          <h2>Nạp tiền qua đối tác <span class="flow-tag">F1</span></h2>
+          <span class="pill pill-wait">chờ third-party</span>
+        </header>
+        <p class="hint">
+          Cần <code>ewallet-third-party</code> và <code>partner-sim</code> (chưa code).
+          Bấm vẫn gọi thật — sẽ trả lỗi ở bước gọi đối tác, đó là hành vi đúng của saga.
+        </p>
+
+        <div class="form-row">
+          <label class="field">
+            <span>Đối tác</span>
+            <select id="tuPartner">
+              <option value="VNPAY">VNPAY — cổng thanh toán</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Số tiền (đ)</span>
+            <input id="tuAmount" type="number" value="500000" min="1" step="1000">
+          </label>
+        </div>
+        <label class="field">
+          <span>Số thẻ/tài khoản đối tác</span>
+          <input id="tuRef" type="text" value="9704000000001234">
+        </label>
+
+        <div class="quick">
+          <span>Nhanh:</span>
+          <button class="chip" data-topup="500000">500k · thành công</button>
+          <button class="chip" data-topup="500999">…999 · đối tác từ chối</button>
+          <button class="chip" data-topup="500888">…888 · đối tác timeout</button>
+        </div>
+
+        <button id="btnTopup" class="btn btn-primary">Nạp tiền</button>
+      </section>
+
+      <!-- ---------------------------------------- F2 -->
+      <section class="card tabpanel" data-panel="bill">
+        <header class="card-head">
+          <h2>Hoá đơn &amp; nạp điện thoại <span class="flow-tag">F2</span></h2>
+          <span class="pill pill-wait">chờ third-party</span>
+        </header>
+
+        <h3 class="sub-head">Thanh toán hoá đơn điện</h3>
+        <div class="form-row">
+          <label class="field">
+            <span>Mã hoá đơn</span>
+            <input id="billCode" type="text" value="PE0123456789">
+          </label>
+          <label class="field">
+            <span>Số tiền (đ)</span>
+            <input id="billAmount" type="number" value="1250000" min="1">
+          </label>
+        </div>
+        <div class="btn-row">
+          <button id="btnBillInquiry" class="btn btn-ghost">Tra cứu</button>
+          <button id="btnBillPay" class="btn btn-primary">Thanh toán</button>
+        </div>
+
+        <h3 class="sub-head">Nạp tiền điện thoại</h3>
+        <div class="form-row">
+          <label class="field">
+            <span>Số thuê bao</span>
+            <input id="telcoPhone" type="text" value="0987654321" maxlength="10">
+          </label>
+          <label class="field">
+            <span>Mệnh giá (đ)</span>
+            <select id="telcoAmount">
+              <option>10000</option><option>20000</option><option selected>50000</option>
+              <option>100000</option><option>200000</option><option>500000</option>
+              <option value="35000">35000 — sai mệnh giá</option>
+            </select>
+          </label>
+        </div>
+        <button id="btnTelco" class="btn btn-primary">Nạp điện thoại</button>
+      </section>
+
+      <!-- ---------------------------------------- F6 -->
+      <section class="card tabpanel" data-panel="history">
+        <header class="card-head">
+          <h2>Lịch sử giao dịch <span class="flow-tag">F6</span></h2>
+          <span class="pill pill-ok">sẵn sàng</span>
+        </header>
+        <p class="hint">
+          Đường đọc này cố ý có lỗi N+1: mỗi đơn thêm một câu SQL.
+          Đổi số lượng rồi so thời gian phản hồi.
+        </p>
+        <div class="form-row">
+          <label class="field">
+            <span>Số đơn tối đa</span>
+            <input id="histLimit" type="number" value="20" min="1" max="100">
+          </label>
+          <div class="field">
+            <span>&nbsp;</span>
+            <button id="btnHistory" class="btn btn-primary">Tải lịch sử</button>
+          </div>
+        </div>
+        <div id="historyTable" class="history"></div>
+      </section>
+
+      <!-- ---------------------------------------- Bugs -->
+      <section class="card tabpanel" data-panel="bugs">
+        <header class="card-head">
+          <h2>Sáu lỗi cài sẵn</h2>
+          <span class="pill pill-muted">hợp đồng nghiệm thu</span>
+        </header>
+        <p class="hint">
+          Mỗi nút chạy đúng kịch bản làm lỗi lộ ra. Xem kết quả ở panel bên phải,
+          rồi đối chiếu trace trong Jaeger.
+        </p>
+
+        <div class="bug" data-ready="1">
+          <div class="bug-head"><strong>#1 — Hạn mức ngày lệch spec</strong><span class="pill pill-ok">chạy được</span></div>
+          <p>Spec và DB ghi 50 triệu, code hardcode 100 triệu. Chuyển 3 lần 18 triệu từ CUST-003.</p>
+          <button id="bug1" class="btn btn-warn">Chạy 3 lệnh 18 triệu</button>
+        </div>
+
+        <div class="bug" data-ready="1">
+          <div class="bug-head"><strong>#2 + #5 — Nhánh treo duyệt</strong><span class="pill pill-ok">chạy được</span></div>
+          <p>Giao dịch ≥ 20 triệu phải treo và phát event <code>PaymentHeld</code>. Code không phát event, lại chậm 700ms.</p>
+          <button id="bug25" class="btn btn-warn">Chuyển 25 triệu (treo duyệt)</button>
+        </div>
+
+        <div class="bug" data-ready="1">
+          <div class="bug-head"><strong>#4 — N+1 query</strong><span class="pill pill-ok">chạy được</span></div>
+          <p>Lịch sử giao dịch chạy 1 câu SQL cho mỗi đơn. Tạo 15 đơn rồi đo thời gian tải lịch sử.</p>
+          <button id="bug4" class="btn btn-warn">Tạo 15 đơn rồi đo</button>
+        </div>
+
+        <div class="bug" data-ready="0">
+          <div class="bug-head"><strong>#6 — gRPC bỏ qua currency</strong><span class="pill pill-wait">chờ third-party</span></div>
+          <p>15.000 USD (= 375 triệu) bị tính như 15.000đ nên lọt mọi hạn mức.</p>
+          <button id="bug6" class="btn btn-warn">Thanh toán 15.000 USD</button>
+        </div>
+
+        <div class="bug" data-ready="0">
+          <div class="bug-head"><strong>#3 — Đường nạp tiền không có test</strong><span class="pill pill-wait">Stage E</span></div>
+          <p>Không bấm được — lỗi này chỉ lộ ra khi so báo cáo coverage với trace.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============================================ Cột phải: kết quả -->
+    <div class="col-right">
+      <section class="card result-card">
+        <header class="card-head">
+          <h2>Kết quả</h2>
+          <button id="clearLog" class="btn btn-ghost btn-sm">Xoá</button>
+        </header>
+        <div id="log" class="log">
+          <p class="log-empty">Chưa có thao tác nào. Bấm một nút bên trái để bắt đầu.</p>
+        </div>
+      </section>
+
+      <section class="card links-card">
+        <h2>Dashboard quan sát</h2>
+        <ul class="links">
+          <li><a href="http://localhost:16686" target="_blank" rel="noopener">Jaeger — xem trace</a></li>
+          <li><a href="http://localhost:18086" target="_blank" rel="noopener">Kafka console — topic &amp; event</a></li>
+          <li><a href="http://localhost:18087" target="_blank" rel="noopener">Adminer — truy vấn database</a></li>
+          <li><a href="http://localhost:18082/swagger-ui.html" target="_blank" rel="noopener">Swagger — payment-order</a></li>
+          <li><a href="http://localhost:18083/swagger-ui.html" target="_blank" rel="noopener">Swagger — payment-business</a></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
