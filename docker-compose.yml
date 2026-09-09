@@ -7,13 +7,19 @@
 
 name: ewallet-demo
 
+# Cap heap: JVM mac dinh lay 1/4 RAM NHIN THAY DUOC, trong container la 1/4 cua ca may Docker
+# (~1,85 GB moi service) -> 7 service co the phinh toi ~13 GB. MaxRAMPercentage=50 buoc JVM tinh
+# theo mem_limit cua chinh container do. SerialGC nhe hon G1 o heap nho, du cho quy mo demo.
 x-otel-env: &otel-env
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
   OTEL_EXPORTER_OTLP_PROTOCOL: grpc
   OTEL_RESOURCE_ATTRIBUTES: service.namespace=ewallet,deployment.environment=demo
   OTEL_METRICS_EXPORTER: none
   OTEL_LOGS_EXPORTER: otlp
-  JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
+  JAVA_TOOL_OPTIONS: >-
+    -javaagent:/otel/opentelemetry-javaagent.jar
+    -XX:MaxRAMPercentage=50
+    -XX:+UseSerialGC
 
 services:
   # ---------- Hạ tầng ----------
@@ -51,6 +57,8 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Mac dinh image dung -Xmx1G, quy mo demo khong can nhieu the.
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
     ports: ["29092:29092"]
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
@@ -79,6 +87,7 @@ services:
   ewallet-gateway:
     build: ./ewallet-gateway
     profiles: ["all"]
+    mem_limit: 384m
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-gateway
@@ -88,6 +97,7 @@ services:
   ewallet-business-customer-mobileapp:
     build: ./ewallet-business-customer-mobileapp
     profiles: ["all"]
+    mem_limit: 384m
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-business-customer-mobileapp
@@ -97,6 +107,7 @@ services:
   ewallet-payment-order:
     build: ./ewallet-payment-order
     profiles: ["all"]
+    mem_limit: 640m
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-payment-order
@@ -115,6 +126,7 @@ services:
   ewallet-payment-business:
     build: ./ewallet-payment-business
     profiles: ["all"]
+    mem_limit: 640m
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-payment-business
@@ -134,6 +146,7 @@ services:
   ewallet-third-party:
     build: ./ewallet-third-party
     profiles: ["all"]
+    mem_limit: 512m
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-third-party
@@ -151,6 +164,7 @@ services:
   ewallet-notification:
     build: ./ewallet-notification
     profiles: ["all"]
+    mem_limit: 512m
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-notification
@@ -165,9 +179,32 @@ services:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
 
+  # ---------- Cong cu quan sat (nhe, chi de xem du lieu) ----------
+  kafka-console:
+    image: docker.redpanda.com/redpandadata/console:v2.7.2
+    profiles: ["infra", "all"]
+    environment:
+      KAFKA_BROKERS: kafka:9092
+    ports: ["18086:8080"]
+    depends_on:
+      kafka: { condition: service_healthy }
+    mem_limit: 256m
+
+  adminer:
+    image: adminer:4.8.1-standalone
+    profiles: ["infra", "all"]
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports: ["18087:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    mem_limit: 128m
+
   partner-sim:
     build: ./partner-sim
     profiles: ["all"]
+    mem_limit: 384m
     environment:
       <<: *otel-env
       OTEL_SERVICE_NAME: partner-sim
