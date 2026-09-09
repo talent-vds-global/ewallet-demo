@@ -8,15 +8,26 @@ spring:
     gateway:
       default-filters:
         - AddRequestHeader=X-Gateway, ewallet-gateway
+      # Thu tu route quan trong: route cu the dat TRUOC route /api/** fallback.
       routes:
+        - id: notifications
+          uri: ${NOTIFICATION_URI:http://ewallet-notification:8085}
+          predicates:
+            - Path=/api/notifications/**
+        - id: wallet
+          uri: ${MOBILEAPP_URI:http://ewallet-business-customer-mobileapp:8081}
+          predicates:
+            - Path=/api/wallet/**
+        - id: orders-internal
+          uri: ${ORDER_URI:http://ewallet-payment-order:8082}
+          predicates:
+            - Path=/orders/**
+          filters:
+            - RewritePath=/orders/(?<seg>.*), /api/orders/$\{seg}
         - id: mobileapp
           uri: ${MOBILEAPP_URI:http://ewallet-business-customer-mobileapp:8081}
           predicates:
             - Path=/api/**
-        - id: orders-history
-          uri: ${ORDER_URI:http://ewallet-payment-order:8082}
-          predicates:
-            - Path=/orders/**
 
 management:
   endpoints:

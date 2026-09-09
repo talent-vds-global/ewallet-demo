@@ -1,0 +1,6 @@
+# Profile "local": chay service tu IDE/Maven, ha tang van trong Docker.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/notifdb
+  kafka:
+    bootstrap-servers: localhost:29092

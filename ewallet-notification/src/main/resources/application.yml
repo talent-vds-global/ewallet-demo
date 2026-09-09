@@ -27,6 +27,13 @@ app:
   kafka:
     payment-events-topic: ewallet.payment.events
 
+# Cong tac de demo retry + DLT (F5 §3.3) — KHONG phai loi co chu dich.
+notification:
+  fail-customer: ${NOTIFICATION_FAIL_CUSTOMER:CUST-DLQ}
+  retry:
+    max-attempts: 3
+    backoff-ms: 1000
+
 management:
   endpoints:
     web:
