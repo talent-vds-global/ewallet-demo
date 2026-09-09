@@ -165,6 +165,8 @@ Repo: <https://github.com/quanglam04/database-quality-library>. Thư viện Java
 | Kafka | 9092 (in-cluster) / 29092 (host) |
 | otel-collector | 4317 (OTLP gRPC) / 4318 (OTLP HTTP) |
 | Jaeger UI | 16686 |
+| Kafka console (Redpanda) | 8080 / **18086** |
+| Adminer (Postgres UI) | 8080 / **18087** |
 | db-quality dashboard — order | 9876 in-cluster / 19082 host |
 | db-quality dashboard — business | 9876 in-cluster / 19083 host |
 | db-quality dashboard — third-party | 9876 in-cluster / 19084 host |

@@ -189,6 +189,8 @@ bằng `host.docker.internal`; service **ở host** gọi vào Docker bằng `lo
 | Kafka | 9092 (nội bộ) | **29092** | 29092 |
 | otel-collector | 4317 / 4318 | 4317 / 4318 | 4317 / 4318 |
 | Jaeger UI | 16686 | **16686** | 16686 |
+| Kafka console (Redpanda) | 8080 | **18086** | 18086 |
+| Adminer (Postgres UI) | 8080 | **18087** | 18087 |
 | db-quality — order | 9876 | **19082** | 9876 |
 | db-quality — business | 9876 | **19083** | 9876 |
 | db-quality — third-party | 9876 | **19084** | 9876 |
@@ -236,6 +238,8 @@ Bản bash: `./scripts/demo-flows.sh <flow>` với cùng danh sách.
 | Thứ | Địa chỉ |
 |---|---|
 | **Jaeger UI** (xem trace) | <http://localhost:16686> |
+| **Kafka console** (xem topic, message, consumer group, DLT) | <http://localhost:18086> |
+| **Adminer** (truy vấn 4 database bằng UI) | <http://localhost:18087> — server `postgres`, user/pass `ewallet`/`ewallet` |
 | **File trace** cho Trace Analyzer | `infra/otel-collector/traces/traces.jsonl` |
 | **File log** JSON | `infra/otel-collector/traces/logs.jsonl` |
 | **Swagger UI** mỗi service | `http://localhost:1808x/swagger-ui.html` (18081–18085, 18090) |
@@ -267,7 +271,52 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 
 ---
 
-## 7. Reset dữ liệu demo
+## 7. Ngân sách RAM
+
+Đo thật trên máy 16 GB (Docker được cấp 7,4 GB):
+
+| Thành phần | RAM thật |
+|---|---|
+| kafka | 274 MB |
+| otel-collector | 41 MB |
+| postgres | 41 MB |
+| jaeger | 18 MB |
+| kafka-console | 69 MB |
+| adminer | 16 MB |
+| **Tổng hạ tầng + dashboard** | **~460 MB** |
+
+**7 service Java là phần tốn RAM, và mặc định thì không an toàn.** JVM lấy 1/4 RAM *nhìn thấy được*;
+trong container nó nhìn thấy cả máy Docker nên mỗi service tự cho mình gần 1,9 GB heap — 7 service
+có thể phình tới ~13 GB. Đo trực tiếp bằng base image:
+
+```
+khong cap:                              MaxHeapSize = 1888 MB
+mem_limit 640m + MaxRAMPercentage=50:   MaxHeapSize =  320 MB
+```
+
+`docker-compose.yml` đã đặt sẵn `-XX:MaxRAMPercentage=50 -XX:+UseSerialGC` trong `JAVA_TOOL_OPTIONS`
+dùng chung, cộng `mem_limit` theo độ nặng từng service:
+
+| Nhóm | Service | `mem_limit` |
+|---|---|---|
+| Nặng (JPA + Kafka + gRPC) | payment-order, payment-business | 640m |
+| Vừa (JPA) | third-party, notification | 512m |
+| Nhẹ (không DB) | gateway, mobileapp, partner-sim | 384m |
+
+Trần cả 7 service = **3,4 GB**, thực tế chạy khoảng 2,2–2,5 GB. Cộng hạ tầng và overhead WSL,
+toàn bộ stack chiếm **~4 GB** trong 7,4 GB Docker được cấp — còn dư cho IDE và trình duyệt.
+
+Muốn siết thêm mức Docker được cấp, tạo `%USERPROFILE%\.wslconfig`:
+
+```ini
+[wsl2]
+memory=6GB
+processors=4
+```
+
+Rồi `wsl --shutdown` và mở lại Docker Desktop.
+
+## 8. Reset dữ liệu demo
 
 Số dư và `daily_usage` thay đổi sau mỗi lần chạy demo. Cách nhanh nhất để về trạng thái đầu:
 
@@ -289,7 +338,7 @@ docker compose exec postgres psql -U ewallet -d paymentdb -c "
 
 ---
 
-## 8. Sự cố hay gặp
+## 9. Sự cố hay gặp
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
@@ -305,7 +354,7 @@ docker compose exec postgres psql -U ewallet -d paymentdb -c "
 
 ---
 
-## 9. Sau khi sửa hợp đồng
+## 10. Sau khi sửa hợp đồng
 
 | Sửa gì | Phải làm gì thêm |
 |---|---|

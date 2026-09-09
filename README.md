@@ -67,8 +67,19 @@ Ba cách chạy local (toàn Docker / IDE + hạ tầng Docker / trộn) và b�
 Host port service ewallet ở dải **18xxx** (gateway 18080, mobileapp 18081, order 18082,
 business 18083 + gRPC 19091, third-party 18084, notification 18085, partner-sim 18090).
 
-Jaeger UI: <http://localhost:16686> · Trace file: `infra/otel-collector/traces/traces.jsonl`
-Swagger UI: `http://localhost:1808x/swagger-ui.html` (18081–18085, 18090) · OpenAPI JSON: `/v3/api-docs`
+## Dashboard quan sát
+
+| Dashboard | Địa chỉ | Xem gì |
+|---|---|---|
+| Jaeger | <http://localhost:16686> | Trace từng giao dịch, span path qua các service |
+| Kafka console | <http://localhost:18086> | Topic, message, consumer group, DLT |
+| Adminer | <http://localhost:18087> | Truy vấn 4 database (server `postgres`, user/pass `ewallet`) |
+| Swagger UI | `http://localhost:1808x/swagger-ui.html` (18081–18085, 18090) | Liệt kê và **gọi thử** endpoint, không cần Postman |
+| db-quality (Topic #80) | 19082 order · 19083 business · 19084 third-party · 19085 notification | SQL pattern, N+1, thiếu index, p50/95/99 |
+
+Trace file cho Trace Analyzer: `infra/otel-collector/traces/traces.jsonl` · OpenAPI JSON: `/v3/api-docs`
+
+Toàn bộ stack chiếm ~4 GB RAM (đã cap heap JVM) — xem [`docs/local-run.md`](docs/local-run.md) mục 7.
 
 ## Lỗi có chủ đích
 
