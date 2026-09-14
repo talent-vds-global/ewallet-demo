@@ -95,7 +95,7 @@ ma trận truy vết rule ↔ code ↔ lỗi ở [`docs/specs/README.md`](docs/s
 | A | Skeleton (docs, compose, infra, proto) | ✅ |
 | B | Scaffold Maven — 7 project boot + trace + db-quality dashboard | ✅ |
 | **D** | **Spec F1–F6 + diagram + hướng dẫn chạy local + script demo** | ✅ |
-| **C** | **Business logic + 6 lỗi có chủ đích** (code theo `docs/specs/`) | 🔄 đang làm — business ✅ order ✅ BFF ✅ gateway ✅ third-party ✅ partner-sim ✅ frontend ✅, còn `notification` ⬜ |
+| **C** | **Business logic + 6 lỗi có chủ đích** (code theo `docs/specs/`) | ✅ cả 7 service + frontend |
 | E | Test suite + JaCoCo (cố ý bỏ test đường F1 top-up) | ⬜ |
 
 Kiểm chứng Stage B: [`docs/stage-b-verify.md`](docs/stage-b-verify.md) (cần bật Docker Desktop).

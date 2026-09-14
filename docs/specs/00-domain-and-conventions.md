@@ -273,7 +273,9 @@ ALTER TABLE notification_outbox
     ADD COLUMN event_id  UUID,
     ADD COLUMN attempt   INT NOT NULL DEFAULT 1;
 
-CREATE UNIQUE INDEX uq_outbox_event_channel ON notification_outbox(event_id, channel);
+-- Phai gom customer_id: P2P bao cho ca nguoi gui lan nguoi nhan qua cung kenh PUSH (R-NOTIF-02).
+CREATE UNIQUE INDEX uq_outbox_event_channel_customer
+    ON notification_outbox(event_id, channel, customer_id);
 ```
 
 ## 11. Dữ liệu seed cho demo

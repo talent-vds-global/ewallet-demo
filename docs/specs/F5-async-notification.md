@@ -69,7 +69,7 @@ Hai group **độc lập offset**. Một group lỗi không chặn group kia.
 | `R-NOTIF-02` | Event có `counterpartyCustomerId` (P2P) | Tạo thông báo cho **cả hai** khách, nội dung khác nhau | must |
 | `R-NOTIF-03` | Gửi thất bại | Retry tối đa **3 lần**, backoff 1s/2s/4s, tăng header `x-attempt` | must |
 | `R-NOTIF-04` | Hết lượt retry | Chuyển `ewallet.payment.events.DLT`, ghi `result = DEAD_LETTER`, **không** nuốt lỗi | must |
-| `R-NOTIF-05` | Cùng `eventId` + `channel` đã có trong outbox | Bỏ qua (unique index `uq_outbox_event_channel`) | must |
+| `R-NOTIF-05` | Cùng `eventId` + `channel` + `customerId` đã có trong outbox | Bỏ qua (unique index `uq_outbox_event_channel_customer`). **Phải có `customerId`** vì `R-NOTIF-02` bắt báo cho cả hai bên P2P qua cùng kênh `PUSH` | must |
 | `R-NOTIF-06` | Client mở SSE | Chỉ nhận thông báo của đúng `customerId` của mình | must |
 | `R-NOTIF-07` | Nội dung thông báo | Không chứa số tài khoản đầy đủ, chỉ 4 số cuối | should |
 | `R-ORDST-01` | `order-status-cg` nhận event | Ánh xạ `PaymentCompleted → COMPLETED`, `PaymentFailed → FAILED`, `PaymentHeld → HELD`, `PaymentRefunded → REFUNDED` | must |

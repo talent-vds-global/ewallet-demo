@@ -97,9 +97,25 @@ Ranh giới ra hệ ngoài — mở khoá F1, F2 và lỗi #6.
 **Lỗi có chủ đích #6 đã tái hiện qua HTTP thật**: 15.000 USD (= 375 triệu) được duyệt với
 `amountVnd = 15000`. **#3**: `TopupAdapter` đã có, phần "không test" thuộc Stage E.
 
+### ✅ `ewallet-notification` (xong)
+
+Consumer group thứ nhất trên topic dùng chung — hoàn tất F5.
+
+| Thành phần | Nội dung |
+|---|---|
+| Migration | `V2__business.sql` (`order_id`, `event_id`, `attempt`) · `V3__fix_outbox_uniqueness.sql` |
+| Định tuyến | `NotificationRouter` — `PaymentCompleted` → PUSH (+SMS nếu ≥ 10tr, + PUSH cho người nhận P2P) · `PaymentFailed` → PUSH · `PaymentHeld` → PUSH+EMAIL · `PaymentRefunded` → PUSH+SMS |
+| Gửi | `NotificationSender` — giả lập, luôn hỏng cho `notification.fail-customer` để demo retry |
+| Retry / DLT | Republish chính topic gốc với `x-attempt` tăng dần (1s/2s/4s), hết 3 lần → `ewallet.payment.events.DLT`. Không ngủ trong listener để khỏi chặn partition |
+| SSE | `SseHub` — giữ kết nối theo `customerId`, heartbeat 15s, đẩy thông báo ngay khi gửi xong |
+| API | `GET /api/notifications/stream` (SSE) · `GET /api/notifications?customerId=` · `GET /api/notifications/ping` |
+
 ### ⬜ Còn lại của Stage C
 
-Chỉ còn `notification` (outbox + SSE + retry/DLT) để hoàn tất F5.
+**Stage C đã xong toàn bộ 7 service.** Sáu lỗi có chủ đích đều đã cài; năm lỗi (#1, #2, #4, #5, #6)
+đã tái hiện được qua HTTP thật, lỗi #3 là khoảng trống test nên chỉ lộ ra ở Stage E.
+
+Tiếp theo là Stage E: test suite + JaCoCo, **cố ý không viết test cho đường F1 top-up**.
 
 ## ⛔ Chưa làm (Stage C trở đi)
 
