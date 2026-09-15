@@ -3,7 +3,11 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-RUN mvn -B -q clean package -DskipTests
+# Cache ~/.m2 dung chung giua cac lan build va giua 7 service (sharing=locked: moi luc mot
+# service ghi, tranh 7 luong tai cung luc tu Maven Central de dut ket noi giua chung).
+# Test chay tren may dev bang scripts/run-tests.ps1, image khong can bien dich test hay JaCoCo.
+RUN --mount=type=cache,id=ewallet-m2,target=/root/.m2,sharing=locked \
+    mvn -B -q clean package -Dmaven.test.skip=true -Djacoco.skip=true
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app

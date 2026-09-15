@@ -1,5 +1,5 @@
 # Demo App — hạ tầng + 6 service ewallet + partner-sim.
-#   docker compose --profile infra up -d      # chỉ Postgres + Kafka + otel-collector + Jaeger
+#   docker compose --profile infra up -d      # chỉ Postgres + Kafka + otel-collector + Jaeger + Grafana/Loki/Tempo
 #   docker compose --profile all up --build   # toàn bộ (Stage B: boot + trace, chưa có nghiệp vụ)
 #
 # Host port các service ewallet dời sang dải 18xxx để tránh đụng cổng máy dev (8080...).
@@ -21,8 +21,12 @@ x-otel-env: &otel-env
   # chinh agent thay vi lop nghiep vu. Tat di thi calledFrom tren dashboard db-quality
   # tro lai dung (vd "OrderHistoryService:67 -> history()"). Span JDBC van con nen
   # trace khong mat gi. Chi tiet: docs/db-quality-integration.md muc 5b.
+  # otel.javaagent.extensions: nap extension call-logger — moi lan service goi nhau (HTTP, gRPC,
+  # Kafka, WebSocket) ban mot log SERVICE_CALL mang trace_id sang Loki. Jar do service
+  # otel-ext-build dung roi dat vao volume otel-ext. Chi tiet: docs/logging.md
   JAVA_TOOL_OPTIONS: >-
     -javaagent:/otel/opentelemetry-javaagent.jar
+    -Dotel.javaagent.extensions=/otel/ext/call-logger.jar
     -XX:MaxRAMPercentage=50
     -XX:+UseSerialGC
     -Dotel.instrumentation.spring-data.enabled=false
@@ -80,7 +84,7 @@ services:
       - ./infra/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
       - ./infra/otel-collector/traces:/traces
     ports: ["4317:4317", "4318:4318"]
-    depends_on: [jaeger]
+    depends_on: [jaeger, tempo, loki]
 
   jaeger:
     image: jaegertracing/all-in-one:1.60
@@ -88,6 +92,50 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports: ["16686:16686"]
+
+  # ---------- Log + trace tap trung: Grafana (UI) + Loki (log) + Tempo (trace) ----------
+  loki:
+    image: grafana/loki:3.2.1
+    profiles: ["infra", "all"]
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./infra/loki/loki-config.yaml:/etc/loki/config.yaml:ro
+      - lokidata:/loki
+    ports: ["13100:3100"]   # API Loki, de tra log bang curl / logcli
+    mem_limit: 384m
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles: ["infra", "all"]
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    volumes:
+      - ./infra/tempo/tempo-config.yaml:/etc/tempo/config.yaml:ro
+    mem_limit: 384m
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    profiles: ["infra", "all"]
+    environment:
+      # Demo noi bo: vao thang khong can dang nhap. KHONG dung cau hinh nay tren VDS that.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/service-calls.json
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["18088:3000"]
+    depends_on: [loki, tempo]
+    mem_limit: 256m
+
+  # Build extension call-logger (otel-extensions/call-logger) roi chep jar vao volume otel-ext.
+  # Chay mot lan roi thoat; moi service Java cho no xong moi khoi dong.
+  otel-ext-build:
+    build: ./otel-extensions/call-logger
+    profiles: ["all"]
+    volumes:
+      - otel-ext:/otel-ext
 
   # ---------- Service ewallet (Dockerfile ở giai đoạn B) ----------
   ewallet-gateway:
@@ -98,7 +146,12 @@ services:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-gateway
     ports: ["18080:8080"]
-    depends_on: [otel-collector, ewallet-business-customer-mobileapp]
+    volumes:
+      - otel-ext:/otel/ext:ro
+    depends_on:
+      otel-ext-build: { condition: service_completed_successfully }
+      otel-collector: { condition: service_started }
+      ewallet-business-customer-mobileapp: { condition: service_started }
 
   ewallet-business-customer-mobileapp:
     build: ./ewallet-business-customer-mobileapp
@@ -108,7 +161,12 @@ services:
       <<: *otel-env
       OTEL_SERVICE_NAME: ewallet-business-customer-mobileapp
     ports: ["18081:8081"]
-    depends_on: [otel-collector, ewallet-payment-order]
+    volumes:
+      - otel-ext:/otel/ext:ro
+    depends_on:
+      otel-ext-build: { condition: service_completed_successfully }
+      otel-collector: { condition: service_started }
+      ewallet-payment-order: { condition: service_started }
 
   ewallet-payment-order:
     build: ./ewallet-payment-order
@@ -125,7 +183,9 @@ services:
       - "19082:9876"   # database-quality-library dashboard
     volumes:
       - ./infra/db-quality/reports:/reports
+      - otel-ext:/otel/ext:ro
     depends_on:
+      otel-ext-build: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
 
@@ -145,7 +205,9 @@ services:
       - "19083:9876"   # database-quality-library dashboard
     volumes:
       - ./infra/db-quality/reports:/reports
+      - otel-ext:/otel/ext:ro
     depends_on:
+      otel-ext-build: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
 
@@ -164,7 +226,9 @@ services:
       - "19084:9876"   # database-quality-library dashboard
     volumes:
       - ./infra/db-quality/reports:/reports
+      - otel-ext:/otel/ext:ro
     depends_on:
+      otel-ext-build: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
 
   ewallet-notification:
@@ -181,7 +245,9 @@ services:
       - "19085:9876"   # database-quality-library dashboard
     volumes:
       - ./infra/db-quality/reports:/reports
+      - otel-ext:/otel/ext:ro
     depends_on:
+      otel-ext-build: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
 
@@ -223,7 +289,13 @@ services:
       <<: *otel-env
       OTEL_SERVICE_NAME: partner-sim
     ports: ["18090:8090"]
-    depends_on: [otel-collector]
+    volumes:
+      - otel-ext:/otel/ext:ro
+    depends_on:
+      otel-ext-build: { condition: service_completed_successfully }
+      otel-collector: { condition: service_started }
 
 volumes:
   pgdata:
+  lokidata:
+  otel-ext:

@@ -51,6 +51,12 @@ management:
     web:
       exposure:
         include: health, info, gateway
+      # globalcors o tren chi ap cho route cua gateway, KHONG ap cho /actuator/**.
+      # Demo Console (18000) goi /actuator/health de hien "gateway san sang"; thieu cau hinh
+      # nay thi trinh duyet chan doc response va bao "khong ket noi duoc gateway" du gateway van song.
+      cors:
+        allowed-origin-patterns: "http://localhost:*,http://127.0.0.1:*"
+        allowed-methods: GET
   endpoint:
     health:
       probes:

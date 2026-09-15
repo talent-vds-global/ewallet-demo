@@ -2,6 +2,9 @@ package com.ewallet.partnersim.ws;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.util.concurrent.Executors;
@@ -31,6 +34,7 @@ public class PartnerWebSocketHandler extends TextWebSocketHandler {
 
     /** Độ trễ quyết toán — đủ lâu để HTTP đã trả xong trước khi frame này tới. */
     private static final long SETTLEMENT_DELAY_MS = 300L;
+    private static final String PEER = "ewallet-third-party";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ScheduledExecutorService scheduler =
@@ -64,8 +68,15 @@ public class PartnerWebSocketHandler extends TextWebSocketHandler {
                 log.info("partner-sim ws SUBSCRIBE tu node={}", node.path("node").asText("?"));
                 send(session, "{\"type\":\"SUBSCRIBED\"}");
             }
-            case "WATCH" -> scheduleSettlement(session,
-                    node.path("orderId").asText(""), node.path("partnerRef").asText(""));
+            case "WATCH" -> {
+                Span span = WsTracing.startReceive("WATCH", PEER, node.path(WsTracing.FIELD).asText(null));
+                try (Scope ignoredScope = span.makeCurrent()) {
+                    scheduleSettlement(session,
+                            node.path("orderId").asText(""), node.path("partnerRef").asText(""));
+                } finally {
+                    span.end();
+                }
+            }
             case "PING" -> send(session, "{\"type\":\"PONG\"}");
             default -> log.debug("partner-sim ws bo qua frame type={}", type);
         }
@@ -77,13 +88,19 @@ public class PartnerWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         log.info("partner-sim ws se bao quyet toan orderId={} sau {}ms", orderId, SETTLEMENT_DELAY_MS);
-        scheduler.schedule(() -> {
-            String frame = String.format(
-                    "{\"type\":\"SETTLEMENT\",\"orderId\":\"%s\",\"partnerRef\":\"%s\","
-                            + "\"status\":\"SETTLED\",\"settledAt\":\"%s\"}",
-                    orderId, partnerRef, Instant.now());
-            send(session, frame);
-        }, SETTLEMENT_DELAY_MS, TimeUnit.MILLISECONDS);
+        // Luồng hẹn giờ không tự mang context — bọc lại để SETTLEMENT nằm chung trace với WATCH.
+        scheduler.schedule(Context.current().wrap(() -> {
+            Span span = WsTracing.startSend("SETTLEMENT", PEER);
+            try (Scope ignoredScope = span.makeCurrent()) {
+                String frame = String.format(
+                        "{\"type\":\"SETTLEMENT\",\"orderId\":\"%s\",\"partnerRef\":\"%s\","
+                                + "\"status\":\"SETTLED\",\"settledAt\":\"%s\"}",
+                        orderId, partnerRef, Instant.now());
+                send(session, WsTracing.withTraceparent(frame));
+            } finally {
+                span.end();
+            }
+        }), SETTLEMENT_DELAY_MS, TimeUnit.MILLISECONDS);
     }
 
     private void send(WebSocketSession session, String payload) {

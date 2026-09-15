@@ -1,5 +1,7 @@
 package com.ewallet.notification.service;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.List;
@@ -66,9 +68,17 @@ public class SseHub {
             log.debug("khong co client SSE nao cua {} — thong bao van nam trong outbox", customerId);
             return;
         }
+        // SSE là chặng cuối (tới trình duyệt) nên không cần nối span, chỉ cần client đọc được
+        // trace_id để tra log. Gửi dạng dòng comment ": trace_id=..." — EventSource bỏ qua,
+        // payload JSON giữ nguyên. Không có agent thì span context rỗng, không gửi gì thêm.
+        SpanContext trace = Span.current().getSpanContext();
         for (SseEmitter emitter : emitters) {
             try {
-                emitter.send(SseEmitter.event().name("payment").data(json));
+                SseEmitter.SseEventBuilder event = SseEmitter.event();
+                if (trace.isValid()) {
+                    event.comment("trace_id=" + trace.getTraceId());
+                }
+                emitter.send(event.name("payment").data(json));
             } catch (Exception e) {
                 remove(customerId, emitter);
             }

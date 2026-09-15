@@ -20,6 +20,7 @@ import org.yaml.snakeyaml.Yaml;
  */
 class GatewayRoutesTest {
 
+    private static Map<String, Object> root;
     private static List<Map<String, Object>> routes;
     private static Map<String, Object> gateway;
 
@@ -27,7 +28,7 @@ class GatewayRoutesTest {
     @SuppressWarnings("unchecked")
     static void docCauHinh() throws Exception {
         try (InputStream in = GatewayRoutesTest.class.getResourceAsStream("/application.yml")) {
-            Map<String, Object> root = new Yaml().load(in);
+            root = new Yaml().load(in);
             Map<String, Object> cloud =
                     (Map<String, Object>) ((Map<String, Object>) root.get("spring")).get("cloud");
             gateway = (Map<String, Object>) cloud.get("gateway");
@@ -134,5 +135,19 @@ class GatewayRoutesTest {
         assertThat((List<String>) all.get("allowedMethods"))
                 .contains("GET", "POST", "OPTIONS");
         assertThat(all.get("allowCredentials")).isEqualTo(false);
+    }
+
+    @Test
+    @DisplayName("actuator cũng mở CORS — globalcors không áp cho /actuator/**, thiếu thì Demo Console báo mất kết nối")
+    @SuppressWarnings("unchecked")
+    void corsChoActuator() {
+        Map<String, Object> web = (Map<String, Object>) ((Map<String, Object>)
+                ((Map<String, Object>) root.get("management")).get("endpoints")).get("web");
+        Map<String, Object> cors = (Map<String, Object>) web.get("cors");
+
+        assertThat(cors).as("management.endpoints.web.cors").isNotNull();
+        assertThat(cors.get("allowed-origin-patterns").toString())
+                .contains("http://localhost:*", "http://127.0.0.1:*");
+        assertThat(cors.get("allowed-methods").toString()).contains("GET");
     }
 }

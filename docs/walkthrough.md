@@ -57,7 +57,7 @@ docker compose ps
 Nếu RAM máy eo hẹp, chạy riêng hạ tầng trước rồi mới bật service:
 
 ```powershell
-docker compose --profile infra up -d      # Postgres, Kafka, OTel, Jaeger, Adminer, Kafka console
+docker compose --profile infra up -d      # Postgres, Kafka, OTel, Jaeger, Grafana/Loki/Tempo, Adminer, Kafka console
 docker compose --profile all up -d
 ```
 
@@ -109,6 +109,7 @@ Tất cả đã chạy sẵn trong `docker compose`, không phải cài thêm g�
 | Dashboard | Địa chỉ | Xem gì | Vì sao quan trọng |
 |---|---|---|---|
 | **Jaeger** | <http://localhost:16686> | trace đầy đủ mọi giao dịch | **Đây là dashboard quan trọng nhất.** Chọn service `ewallet-gateway` → Find Traces. Mỗi trace là một giao dịch đi xuyên 5–6 service, thấy rõ HTTP → gRPC → JDBC → Kafka |
+| **Grafana** | <http://localhost:18088> | log của cả 7 service ở một chỗ, tìm theo `trace_id` / từ khoá; log `SERVICE_CALL` cho mỗi lần service gọi nhau | Giống Kibana: dán `trace_id` vào ô trên dashboard là thấy cả giao dịch đi qua những đâu, kèm log nghiệp vụ. Bấm `trace_id` để nhảy sang trace Tempo. Chi tiết: [`logging.md`](logging.md) |
 | **Kafka console** | <http://localhost:18086> | topic `ewallet.payment.events`, 2 consumer group, topic `.DLT` | Xem event thật, độ trễ consumer, message nào rơi vào dead letter |
 | **Adminer** | <http://localhost:18087> | 4 database: `orderdb`, `paymentdb`, `thirdpartydb`, `notifdb` | Đăng nhập: server `postgres`, user `ewallet`, pass `ewallet`. Soi sổ cái, trạng thái đơn |
 | **Demo Console** | <http://localhost:18000> | giao diện tạo giao dịch | Vừa là công cụ demo, vừa là nơi bấm ra kịch bản lỗi |
@@ -220,6 +221,7 @@ docker compose --profile all down -v       # dừng và xoá sạch database
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |---|---|---|
+| Demo Console báo **"không kết nối được gateway"** dù `curl localhost:18080/actuator/health` trả 200 | `globalcors` của gateway chỉ áp cho route, không áp cho `/actuator/**` — trình duyệt chặn đọc response vì thiếu `Access-Control-Allow-Origin` | Đã xử lý: `management.endpoints.web.cors` trong `ewallet-gateway/application.yml`. Nếu vẫn thấy lỗi thì build lại gateway (`docker compose --profile all up -d --build ewallet-gateway`) rồi tải lại trang bằng Ctrl+F5 |
 | Cổng 8080 bị chiếm | `AgentService` của máy chiếm sẵn | Gateway đã đổi sang **18080**, dùng cổng này |
 | `traces.jsonl` rỗng | chưa chạy giao dịch nào | Chạy `.\scripts\demo-flows.ps1 -Flow all` |
 | Service chết khi chạy trên host (không Docker) | JVM báo timezone `Asia/Saigon`, Postgres không hiểu | Thêm `-Duser.timezone=Asia/Ho_Chi_Minh` |
@@ -228,3 +230,4 @@ docker compose --profile all down -v       # dừng và xoá sạch database
 | Máy chậm / hết RAM | 7 service + Kafka ~4 GB | Chạy `--profile infra` trước, rồi bật dần |
 | `calledFrom` của db-quality toàn trỏ vào `io.opentelemetry.javaagent...` | OTel agent chèn interceptor vào call stack | Đã xử lý: `-Dotel.instrumentation.spring-data.enabled=false` trong compose — xem [`db-quality-integration.md`](db-quality-integration.md) §5b |
 | Dashboard db-quality có nhiều `N_PLUS_ONE` | heuristic đếm theo cửa sổ thu, không theo từng request | Chỉ finding ở `OrderHistoryService:67` là lỗi #4 thật; xem §5b |
+| `docker compose ... --build` lỗi `Could not transfer artifact ... Premature end of Content-Length delimited message body` | Maven trong container tải thư viện bị đứt giữa chừng (trước đây không có cache, 7 service tải song song) | Đã xử lý trong Dockerfile: cache `~/.m2` dùng chung + không biên dịch test trong image. Gặp lại thì chỉ cần chạy lại lệnh — phần đã tải được giữ trong cache |
