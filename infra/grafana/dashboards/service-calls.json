@@ -1,0 +1,156 @@
+{
+  "uid": "ewallet-service-calls",
+  "title": "ewallet — Service calls & logs",
+  "description": "Tìm log theo trace_id / từ khoá, và thống kê lời gọi giữa các service (log SERVICE_CALL do extension call-logger bắn ra).",
+  "tags": ["ewallet", "logs", "traces"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": { "label": "service_name", "stream": "", "type": 1, "refId": "LokiVariableQueryEditor-VariableQuery" },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "sort": 1
+      },
+      {
+        "name": "trace_id",
+        "label": "trace_id",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      },
+      {
+        "name": "search",
+        "label": "Từ khoá (regex, không phân biệt hoa thường)",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "logs",
+      "title": "Log — lọc theo service / trace_id / từ khoá",
+      "description": "Mở một dòng log rồi bấm \"Mở trace trong Tempo\" ở trường trace_id để xem cả cây span.",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 14 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "{service_name=~\"$service\"} |~ \"(?i)$search\" | trace_id=~\"$trace_id.*\""
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "SERVICE_CALL — mọi lời gọi giữa các service",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "{service_name=~\"$service\"} | event_name=\"service.call\" | trace_id=~\"$trace_id.*\""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Số lời gọi đi theo service → peer",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 9 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "legendFormat": "{{service_name}} → {{call_peer}}",
+          "expr": "sum by (service_name, call_peer) (count_over_time({service_name=~\"$service\"} | event_name=\"service.call\" | call_direction=\"outbound\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Lời gọi lỗi (WARN) theo service",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 9 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "legendFormat": "{{service_name}} {{call_operation}}",
+          "expr": "sum by (service_name, call_operation) (count_over_time({service_name=~\"$service\"} | event_name=\"service.call\" | severity_text=\"WARN\" [$__auto]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "p95 thời gian lời gọi đi theo operation (ms)",
+      "description": "Lời gọi gRPC AuthorizePayment ở nhánh HELD vượt NFR 500ms sẽ nổi lên đây (lỗi #5).",
+      "gridPos": { "x": 0, "y": 33, "w": 24, "h": 10 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 300 }, { "color": "red", "value": 500 } ] },
+          "custom": { "cellOptions": { "type": "color-text" } }
+        },
+        "overrides": []
+      },
+      "options": { "sortBy": [ { "displayName": "p95 (max trong khoảng)", "desc": true } ] },
+      "transformations": [
+        { "id": "reduce", "options": { "reducers": ["max"], "mode": "seriesToRows" } },
+        { "id": "organize", "options": { "renameByName": { "Field": "service → peer operation", "Max": "p95 (max trong khoảng)" } } }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "legendFormat": "{{service_name}} → {{call_peer}} {{call_operation}}",
+          "expr": "quantile_over_time(0.95, {service_name=~\"$service\"} | event_name=\"service.call\" | call_direction=\"outbound\" | unwrap call_duration_ms [$__auto]) by (service_name, call_peer, call_operation)"
+        }
+      ]
+    }
+  ]
+}

@@ -126,7 +126,8 @@ Lỗi #2 và #5 nằm chung nhánh `HELD` — một nhánh, hai vấn đề.
   - `OTEL_EXPORTER_OTLP_PROTOCOL=grpc`
 - Agent tự instrument: Spring MVC, WebClient/RestTemplate, JDBC (kèm `db.statement`), Kafka (producer/consumer, `messaging.*`), gRPC (`rpc.*`).
 - **Log JSON**: `logstash-logback-encoder`; agent tự chèn `trace_id` / `span_id` vào MDC.
-- **otel-collector** export song song: file `traces.jsonl` (đầu vào Trace Analyzer) + Jaeger (người xem).
+- **otel-collector** export song song: file `traces.jsonl` / `logs.jsonl` (đầu vào Trace Analyzer) + Jaeger + Tempo/Loki (Grafana, người xem).
+- **call-logger** (extension của OTel agent, `otel-extensions/call-logger`): mỗi lời gọi giữa service bắn log `SERVICE_CALL` kèm `trace_id`. WebSocket tự mang `traceparent` trong frame. Xem `docs/logging.md`.
 - gRPC attribute (cho lỗi #6): bật `OTEL_INSTRUMENTATION_GRPC_CAPTURE_METADATA` / span attribute custom tối thiểu — ghi rõ đây là "knob" để demo thu context ngoài HTTP.
 
 ### Database context — `database-quality-library` (kế thừa Topic #80)

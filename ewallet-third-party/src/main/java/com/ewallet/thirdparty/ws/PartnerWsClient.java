@@ -4,6 +4,9 @@ import com.ewallet.thirdparty.entity.PartnerTransaction;
 import com.ewallet.thirdparty.repo.PartnerTransactionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Scope;
 import jakarta.annotation.PreDestroy;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -41,6 +44,7 @@ public class PartnerWsClient extends TextWebSocketHandler {
 
     private static final long[] RECONNECT_BACKOFF_MS = {1_000L, 2_000L, 5_000L};
     private static final long HEARTBEAT_SECONDS = 30L;
+    private static final String PEER = "partner-sim";
 
     private final WebSocketClient webSocketClient;
     private final PartnerTransactionRepository transactionRepository;
@@ -123,7 +127,13 @@ public class PartnerWsClient extends TextWebSocketHandler {
 
         String partnerRef = node.path("partnerRef").asText("");
         String orderId = node.path("orderId").asText("");
-        applySettlement(orderId, partnerRef);
+        Span span = WsTracing.startReceive("SETTLEMENT", PEER,
+                node.path(WsTracing.FIELD).asText(null));
+        try (Scope ignoredScope = span.makeCurrent()) {
+            applySettlement(orderId, partnerRef);
+        } finally {
+            span.end();
+        }
     }
 
     /** Điền thời điểm quyết toán cho giao dịch tương ứng. */
@@ -148,8 +158,16 @@ public class PartnerWsClient extends TextWebSocketHandler {
 
     /** Gọi ngay sau khi đối tác nhận lệnh, để đối tác biết cần báo quyết toán về đâu. */
     public void watch(String orderId, String partnerRef) {
-        send(String.format("{\"type\":\"WATCH\",\"orderId\":\"%s\",\"partnerRef\":\"%s\"}",
-                orderId, partnerRef));
+        Span span = WsTracing.startSend("WATCH", PEER);
+        try (Scope ignoredScope = span.makeCurrent()) {
+            boolean sent = send(WsTracing.withTraceparent(String.format(
+                    "{\"type\":\"WATCH\",\"orderId\":\"%s\",\"partnerRef\":\"%s\"}", orderId, partnerRef)));
+            if (!sent) {
+                span.setStatus(StatusCode.ERROR, "websocket not connected or send failed");
+            }
+        } finally {
+            span.end();
+        }
     }
 
     private void heartbeat() {
@@ -160,18 +178,20 @@ public class PartnerWsClient extends TextWebSocketHandler {
         send("{\"type\":\"PING\"}");
     }
 
-    private void send(String payload) {
+    private boolean send(String payload) {
         WebSocketSession current = session.get();
         if (current == null || !current.isOpen()) {
             log.debug("chua co WebSocket, bo qua frame: {}", payload);
-            return;
+            return false;
         }
         try {
             synchronized (current) {
                 current.sendMessage(new TextMessage(payload));
             }
+            return true;
         } catch (Exception e) {
             log.warn("gui frame that bai: {}", e.toString());
+            return false;
         }
     }
 

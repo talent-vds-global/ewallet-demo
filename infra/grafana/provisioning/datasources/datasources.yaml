@@ -1,0 +1,41 @@
+# Hai datasource noi cheo nhau:
+#  - Loki -> Tempo : log co structured metadata trace_id thi hien nut mo trace
+#  - Tempo -> Loki : dang xem span thi bam "Logs for this span" ra log cung trace_id
+# Dau $$ la de Grafana khong hieu nham thanh bien moi truong khi provisioning.
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    jsonData:
+      maxLines: 5000
+      derivedFields:
+        - name: trace_id
+          matcherType: label
+          matcherRegex: trace_id
+          datasourceUid: tempo
+          url: "$${__value.raw}"
+          urlDisplayLabel: "Mở trace trong Tempo"
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-2m"
+        spanEndTimeShift: "2m"
+        customQuery: true
+        query: '{service_name=~".+"} | trace_id="$${__trace.traceId}"'

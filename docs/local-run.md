@@ -143,6 +143,11 @@ mvn spring-boot:run -Dspring-boot.run.profiles=local \
 
 Không bật agent thì app vẫn chạy bình thường, chỉ là không có trace.
 
+Muốn có thêm log `SERVICE_CALL` mỗi lần service gọi nhau: build extension một lần
+(`cd otel-extensions/call-logger && mvn package`) rồi thêm
+`-Dotel.javaagent.extensions=../otel-extensions/call-logger/target/call-logger.jar` vào `jvmArguments`.
+Chi tiết: [`logging.md`](logging.md).
+
 ---
 
 ## 3. Cách 3 — Trộn: một service ở IDE, phần còn lại ở Docker
@@ -189,6 +194,8 @@ bằng `host.docker.internal`; service **ở host** gọi vào Docker bằng `lo
 | Kafka | 9092 (nội bộ) | **29092** | 29092 |
 | otel-collector | 4317 / 4318 | 4317 / 4318 | 4317 / 4318 |
 | Jaeger UI | 16686 | **16686** | 16686 |
+| Grafana (log + trace) | 3000 | **18088** | 18088 |
+| Loki API | 3100 | **13100** | 13100 |
 | Frontend Demo Console | 80 | **18000** | 18000 |
 | Kafka console (Redpanda) | 8080 | **18086** | 18086 |
 | Adminer (Postgres UI) | 8080 | **18087** | 18087 |
@@ -239,6 +246,7 @@ Bản bash: `./scripts/demo-flows.sh <flow>` với cùng danh sách.
 | Thứ | Địa chỉ |
 |---|---|
 | **Demo Console** (bấm chạy flow) | <http://localhost:18000> |
+| **Grafana** (tìm log theo trace_id, log `SERVICE_CALL`, trace Tempo) | <http://localhost:18088> — [`logging.md`](logging.md) |
 | **Jaeger UI** (xem trace) | <http://localhost:16686> |
 | **Kafka console** (xem topic, message, consumer group, DLT) | <http://localhost:18086> |
 | **Adminer** (truy vấn 4 database bằng UI) | <http://localhost:18087> — server `postgres`, user/pass `ewallet`/`ewallet` |
@@ -372,6 +380,8 @@ docker compose exec postgres psql -U ewallet -d paymentdb -c "
 
 | Triệu chứng | Nguyên nhân | Cách xử lý |
 |---|---|---|
+| Demo Console báo **"không kết nối được gateway"** dù `curl localhost:18080/actuator/health` trả 200 | `globalcors` của gateway chỉ áp cho route, không áp cho `/actuator/**` — trình duyệt chặn đọc response vì thiếu `Access-Control-Allow-Origin` | Đã xử lý: `management.endpoints.web.cors` trong `ewallet-gateway/application.yml`. Nếu vẫn thấy lỗi thì build lại gateway (`docker compose --profile all up -d --build ewallet-gateway`) rồi tải lại trang bằng Ctrl+F5 |
+| `docker compose ... --build` lỗi `Could not transfer artifact ... Premature end of Content-Length delimited message body` | Maven trong container tải thư viện bị đứt giữa chừng (trước đây không có cache, 7 service tải song song) | Đã xử lý trong Dockerfile: cache `~/.m2` dùng chung + không biên dịch test trong image. Gặp lại thì chỉ cần chạy lại lệnh — phần đã tải được giữ trong cache |
 | `docker compose up` treo ở `kafka` | Kafka KRaft chưa healthy | Chờ ~30s; healthcheck retry 30 lần. Nếu vẫn lỗi: `docker compose down -v` rồi lên lại |
 | Service báo `Connection refused` tới `postgres` | Lên trước khi Postgres healthy | Đã có `depends_on: service_healthy`; nếu vẫn lỗi thì restart service đó |
 | Cổng 5432 / 16686 bị chiếm | Có Postgres / Jaeger khác trên máy | Đổi port ở `docker-compose.yml` hoặc tắt tiến trình đang chiếm |
