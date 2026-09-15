@@ -1,8 +1,9 @@
-# Demo hiện tại làm được gì (sau Stage B)
+# Demo hiện tại làm được gì (sau Stage E)
 
-> Stage B = khung chạy được: 7 service boot, nói chuyện với nhau đủ mọi giao thức, sinh trace/log/DB-metrics.
-> **Chưa có** business logic thật và 6 lỗi có chủ đích (đó là Stage C).
-> Spec nghiệp vụ F1–F6 + sequence diagram + hướng dẫn chạy local: **đã xong** (Stage D) — xem [`specs/`](specs/README.md) và [`local-run.md`](local-run.md).
+> Đã xong: **B** khung chạy được · **D** spec F1–F6 + sequence diagram · **C** business logic + 6 lỗi có chủ đích
+> · **E** test suite + JaCoCo (457 test, 86% độ phủ).
+> Còn lại: **F** chạy trên VDS thật.
+> Xem thêm: [`specs/`](specs/README.md) · [`local-run.md`](local-run.md) · [`testing.md`](testing.md).
 
 ## ✅ Đang chạy được
 
@@ -110,21 +111,50 @@ Consumer group thứ nhất trên topic dùng chung — hoàn tất F5.
 | SSE | `SseHub` — giữ kết nối theo `customerId`, heartbeat 15s, đẩy thông báo ngay khi gửi xong |
 | API | `GET /api/notifications/stream` (SSE) · `GET /api/notifications?customerId=` · `GET /api/notifications/ping` |
 
-### ⬜ Còn lại của Stage C
+### ✅ Stage C đã xong toàn bộ 7 service
 
-**Stage C đã xong toàn bộ 7 service.** Sáu lỗi có chủ đích đều đã cài; năm lỗi (#1, #2, #4, #5, #6)
-đã tái hiện được qua HTTP thật, lỗi #3 là khoảng trống test nên chỉ lộ ra ở Stage E.
+Sáu lỗi có chủ đích đều đã cài; năm lỗi (#1, #2, #4, #5, #6) tái hiện được qua HTTP thật,
+lỗi #3 là khoảng trống test nên lộ ra ở Stage E.
 
-Tiếp theo là Stage E: test suite + JaCoCo, **cố ý không viết test cho đường F1 top-up**.
+## ✅ Stage E — test suite & độ phủ (xong)
 
-## ⛔ Chưa làm (Stage C trở đi)
+**457 test, 7 service, độ phủ dòng 86%, toàn bộ xanh.** Chi tiết: [`testing.md`](testing.md).
 
-- Business logic thật: transfer / top-up / bill / P2P / refund, saga nhiều bước, state machine, tính phí, ghi sổ kép, check hạn mức & ngưỡng.
-- **6 lỗi có chủ đích** (spec drift hạn mức, nhánh HELD quên publish event, flow top-up không test, N+1 query, vi phạm NFR < 500ms, gRPC bỏ qua `currency`).
-- gRPC client của order gọi thật sang business.
-- business publish event thật lên Kafka; DLT + phân loại retry.
-- third-party mở WebSocket bền + adapter theo `partner_code`.
-- notification ghi `notification_outbox` + đẩy SSE khi có event thật.
-- 6 flow F1–F6 chạy end-to-end (spec đã có ở `specs/`, code là Stage C).
-- Test suite & coverage (Stage E).
-- 3 collector (Code Indexer / Doc Indexer / Trace Analyzer) + db-quality-collector — nằm ở `../collectors/`, chưa bắt đầu.
+```powershell
+.\scripts\run-tests.ps1          # chạy hết rồi in bảng độ phủ
+```
+
+| Service | Dòng | Nhánh | Test |
+|---|---:|---:|---:|
+| ewallet-payment-business | 91% | 84% | 166 |
+| ewallet-payment-order | 95% | 88% | 83 |
+| ewallet-third-party | 67% | 62% | 57 |
+| ewallet-notification | 88% | 83% | 55 |
+| partner-sim | 88% | 83% | 51 |
+| ewallet-business-customer-mobileapp | 65% | 86% | 37 |
+| ewallet-gateway | — | — | 8 |
+| **Toàn bộ** | **86%** | | **457** |
+
+- JaCoCo 0.8.12 trên cả 7 pom, báo cáo XML + HTML ở `*/target/site/jacoco/`.
+- `scripts/coverage-report.py --gaps` gom báo cáo của mọi service thành một bảng
+  và liệt kê lớp có độ phủ 0%.
+- Thuần JUnit 5 + Mockito + AssertJ: không Docker, không DB, cả bộ chạy dưới 1 phút.
+- `@DisplayName` của mỗi test ghi mã rule (`R-LIMIT-01`, `R-COMP-05`, ...) để nối
+  **rule → test → dòng code**.
+
+**Lỗi có chủ đích #3 đã hiện thành số đo được:** `TopupAdapter` 0% / 11 dòng, trong khi
+`BillAdapter` và `TelcoAdapter` ngay bên cạnh đều 100%. Kiểm chứng nhanh:
+
+```bash
+grep -rl "TOP_UP" */src/test/java/     # không ra kết quả nào
+```
+
+**Điểm đáng chú ý nhất:** bộ test xanh hoàn toàn mà năm lỗi kia vẫn nằm nguyên trong code,
+và các dòng đó *đều được phủ* — bảng lý giải từng lỗi ở [`testing.md`](testing.md) §4.
+
+## ⛔ Chưa làm
+
+- Integration test có DB thật (Testcontainers): migration Flyway, câu SQL, index.
+- Test hợp đồng gRPC giữa order và business (hiện mỗi bên tự mock bên kia).
+- Kiểm chứng N+1 tự động — hiện làm tay bằng `pg_stat_user_tables.seq_scan`.
+- Stage F: chạy trên VDS thật.
