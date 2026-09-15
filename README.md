@@ -8,7 +8,9 @@ Hệ thống "được đem ra quan sát" cho platform AI Quality Control (Ngư�
 | Đọc gì | Ở đâu |
 |---|---|
 | **Spec nghiệp vụ F1–F6** (Requirement + Design + sequence diagram) | [`docs/specs/`](docs/specs/README.md) |
+| **Hướng dẫn xem demo từng bước** (chạy, dashboard, 6 lỗi) | [`docs/walkthrough.md`](docs/walkthrough.md) |
 | **Chạy local & kịch bản demo** | [`docs/local-run.md`](docs/local-run.md) |
+| **Test suite & độ phủ** (457 test, 86%) | [`docs/testing.md`](docs/testing.md) |
 | Kiến trúc & phạm vi (source of truth topology) | [`docs/architecture.md`](docs/architecture.md) |
 | Sơ đồ container / bản đồ flow / máy trạng thái | [`docs/diagrams/`](docs/diagrams/00-container.md) |
 | Hợp đồng dữ liệu cho collector | [`docs/collector-data-contract.md`](docs/collector-data-contract.md) |
@@ -96,6 +98,8 @@ ma trận truy vết rule ↔ code ↔ lỗi ở [`docs/specs/README.md`](docs/s
 | B | Scaffold Maven — 7 project boot + trace + db-quality dashboard | ✅ |
 | **D** | **Spec F1–F6 + diagram + hướng dẫn chạy local + script demo** | ✅ |
 | **C** | **Business logic + 6 lỗi có chủ đích** (code theo `docs/specs/`) | ✅ cả 7 service + frontend |
-| E | Test suite + JaCoCo (cố ý bỏ test đường F1 top-up) | ⬜ |
+| **E** | **Test suite + JaCoCo** (cố ý bỏ test đường F1 top-up) | ✅ 457 test, 86% độ phủ |
+| F | Chạy trên VDS thật | ⬜ |
 
 Kiểm chứng Stage B: [`docs/stage-b-verify.md`](docs/stage-b-verify.md) (cần bật Docker Desktop).
+Xem demo từng bước: [`docs/walkthrough.md`](docs/walkthrough.md).

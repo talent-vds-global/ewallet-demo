@@ -16,10 +16,16 @@ x-otel-env: &otel-env
   OTEL_RESOURCE_ATTRIBUTES: service.namespace=ewallet,deployment.environment=demo
   OTEL_METRICS_EXPORTER: none
   OTEL_LOGS_EXPORTER: otlp
+  # Tat instrumentation spring-data cua OTel agent: no chen RepositoryInterceptor vao
+  # call stack, khien database-quality-library (Topic #80) quy MOI cau SQL ve lop cua
+  # chinh agent thay vi lop nghiep vu. Tat di thi calledFrom tren dashboard db-quality
+  # tro lai dung (vd "OrderHistoryService:67 -> history()"). Span JDBC van con nen
+  # trace khong mat gi. Chi tiet: docs/db-quality-integration.md muc 5b.
   JAVA_TOOL_OPTIONS: >-
     -javaagent:/otel/opentelemetry-javaagent.jar
     -XX:MaxRAMPercentage=50
     -XX:+UseSerialGC
+    -Dotel.instrumentation.spring-data.enabled=false
 
 services:
   # ---------- Hạ tầng ----------

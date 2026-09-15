@@ -97,6 +97,57 @@ thứ tự không đảm bảo. Xử lý ở stage C:
   wrap sau khi gọi `flyway.migrate()` trên nguồn gốc.
 - Chấp nhận được: vài query `flyway_schema_history` trong `/collected-queries` — collector lọc theo prefix bảng.
 
+## 5b. Xung đột với OTel Java Agent — **bắt buộc tắt instrumentation `spring-data`**
+
+> Phát hiện khi chạy thật ngày 2026-09-14. Không tắt thì `calledFrom` **vô dụng hoàn toàn**.
+
+Thư viện xác định `calledFrom` bằng cách duyệt stack trace và lấy frame nghiệp vụ đầu tiên.
+OTel Java Agent instrument Spring Data bằng cách chèn `RepositoryInterceptor` của chính nó
+vào call stack — và lớp đó không nằm trong danh sách bỏ qua của thư viện. Hệ quả: **mọi**
+câu SQL đều quy về cùng một chỗ:
+
+```
+calledFrom: io.opentelemetry.javaagent.instrumentation.spring.data.v1_8.
+            SpringDataInstrumentationModule$RepositoryInterceptor:121 -> invoke()
+```
+
+Mất `calledFrom` thì dashboard không còn chỉ ra được câu SQL nào sinh từ dòng code nào —
+tab **Findings** báo N+1 nhưng không biết ở đâu.
+
+**Cách xử lý** (đã áp vào `docker-compose.yml`, biến `x-otel-env`):
+
+```yaml
+JAVA_TOOL_OPTIONS: >-
+  -javaagent:/otel/opentelemetry-javaagent.jar
+  -Dotel.instrumentation.spring-data.enabled=false
+```
+
+Sau khi tắt, `calledFrom` trở lại đúng:
+
+```
+com.ewallet.order.history.OrderHistoryService:67 -> history()
+com.ewallet.order.saga.PaymentSagaOrchestrator:291 -> updateStatus()
+com.ewallet.order.kafka.OrderStatusListener:72 -> onPaymentEvent()
+```
+
+**Mất gì khi tắt:** chỉ mất span `repository.method` của Spring Data trong trace.
+Span **JDBC vẫn còn nguyên** kèm `db.statement`, Jaeger vẫn thấy đủ câu SQL.
+Đổi lại được `calledFrom` chính xác. Đánh đổi hoàn toàn có lợi.
+
+> Về lâu dài nên đề nghị chủ Topic #80 thêm `io.opentelemetry.javaagent.*` vào danh sách
+> frame bỏ qua khi duyệt stack — khi đó không cần tắt instrumentation nữa.
+
+### Cảnh báo: `N_PLUS_ONE` của thư viện có nhiễu
+
+Heuristic của thư viện là "cùng một câu SQL lặp nhiều lần **trong cửa sổ thu**", không phải
+"lặp nhiều lần **trong một request**". Chạy 6 flow demo cho ra 7 finding `N_PLUS_ONE`, trong đó
+**chỉ 1 cái là lỗi thật** (#4 ở `OrderHistoryService:67`); 6 cái còn lại là insert `order_steps`
+và update `payment_orders` của saga lặp qua nhiều đơn khác nhau — hành vi bình thường.
+
+Khi xem dashboard, **đừng tin `N_PLUS_ONE` một mình**. Kiểm chứng bằng Jaeger: N+1 thật là khi
+nhiều span JDBC giống nhau nằm **dưới cùng một span HTTP cha** — mở trace của
+`GET /api/orders/history` sẽ thấy đúng hình dạng đó.
+
 ## 6. Endpoint thư viện phát ra (mỗi service, trên port 9876)
 
 | Endpoint | Nội dung | Dùng cho collector |
