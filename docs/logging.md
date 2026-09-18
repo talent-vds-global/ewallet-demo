@@ -158,6 +158,7 @@ RAM thêm: Loki, Tempo, Grafana mỗi cái cap 256–384 MB.
 ## 6. Lưu ý khi đưa lên VDS thật
 
 - Grafana đang bật **anonymous Admin** cho tiện demo — phải tắt, nối SSO/LDAP.
-- Loki / Tempo đang lưu filesystem trong container, Tempo mất dữ liệu khi xoá container. Production dùng object storage (S3/MinIO) và chế độ microservices hoặc simple-scalable.
+- Loki / Tempo đang lưu filesystem trong volume (`lokidata`, `tempodata`) — sống qua lần xoá container, mất khi `docker compose down -v`. Tempo giữ 72h. Production dùng object storage (S3/MinIO) và chế độ microservices hoặc simple-scalable.
+- Tempo cũng là nguồn trace của Trace Analyzer từ Stage F (API `http://localhost:13200`, `/api/search` + `/api/traces/<id>`); giai đoạn demo Trace Analyzer đọc file `traces*.jsonl`. Xem `collector-data-contract.md` §3.
 - Nếu VDS đã có ELK/OpenSearch: giữ nguyên call-logger, chỉ đổi exporter trong `infra/otel-collector/config.yaml` sang `elasticsearch` / `opensearch`.
 - Log `SERVICE_CALL` không chứa body hay query string, nhưng log nghiệp vụ có `customerId`, `orderId` — cần chính sách retention và phân quyền xem log.

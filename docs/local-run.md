@@ -196,6 +196,7 @@ bằng `host.docker.internal`; service **ở host** gọi vào Docker bằng `lo
 | Jaeger UI | 16686 | **16686** | 16686 |
 | Grafana (log + trace) | 3000 | **18088** | 18088 |
 | Loki API | 3100 | **13100** | 13100 |
+| Tempo API (Trace Analyzer, curl) | 3200 | **13200** | 13200 |
 | Frontend Demo Console | 80 | **18000** | 18000 |
 | Kafka console (Redpanda) | 8080 | **18086** | 18086 |
 | Adminer (Postgres UI) | 8080 | **18087** | 18087 |
@@ -250,8 +251,10 @@ Bản bash: `./scripts/demo-flows.sh <flow>` với cùng danh sách.
 | **Jaeger UI** (xem trace) | <http://localhost:16686> |
 | **Kafka console** (xem topic, message, consumer group, DLT) | <http://localhost:18086> |
 | **Adminer** (truy vấn 4 database bằng UI) | <http://localhost:18087> — server `postgres`, user/pass `ewallet`/`ewallet` |
-| **File trace** cho Trace Analyzer | `infra/otel-collector/traces/traces.jsonl` |
-| **File log** JSON | `infra/otel-collector/traces/logs.jsonl` |
+| **File trace** cho Trace Analyzer | `infra/otel-collector/traces/traces.jsonl` (+ bản xoay vòng `traces-<UTC>.jsonl`, 100 MB / 3 ngày). Mỗi dòng là một lô span, không phải một trace |
+| **File log** JSON | `infra/otel-collector/traces/logs.jsonl` (+ `logs-<UTC>.jsonl`, 50 MB / 3 ngày) |
+| **Tempo API** (nguồn trace từ Stage F) | <http://localhost:13200/api/search?q={}&spss=50> |
+| **Bảng route → flow** | `infra/v-quality/flow-map.yaml` — kiểm bằng `python scripts/flow-map-check.py` |
 | **Swagger UI** mỗi service | `http://localhost:1808x/swagger-ui.html` (18081–18085, 18090) |
 | **OpenAPI JSON** | `http://localhost:1808x/v3/api-docs` |
 | **db-quality dashboard** | order 19082 · business 19083 · third-party 19084 · notification 19085 |

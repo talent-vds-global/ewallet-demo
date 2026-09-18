@@ -1,5 +1,9 @@
-# Tempo 2.x monolithic, luu local trong container (mat khi xoa container — demo chap nhan duoc;
-# ban goc van nam trong infra/otel-collector/traces/traces.jsonl).
+# Tempo 2.x monolithic. Hai vai tro:
+#  - kho trace cho Grafana (nguoi xem)
+#  - nguon trace cua Trace Analyzer tu Stage F (TempoTraceSource). Giai doan demo Trace Analyzer
+#    doc file infra/otel-collector/traces/traces*.jsonl (FileTraceSource) — cung du lieu.
+# Du lieu nam trong volume tempodata (/var/tempo) nen song qua lan xoa container;
+# `docker compose down -v` moi xoa. API tren host: http://localhost:13200
 stream_over_http_enabled: true
 
 server:
@@ -16,6 +20,17 @@ distributor:
 ingester:
   max_block_duration: 5m
 
+# Trace Analyzer goi /api/search theo lo lon, can noi gioi han mac dinh:
+#  - default_result_limit 20 -> 500 trace moi lan search khi khong truyen `limit`
+#  - `spss` (so span khop tra ve moi trace) mac dinh chi 3 va Tempo 2.6 KHONG co cau hinh doi mac dinh
+#    -> Trace Analyzer luon truyen spss ro rang trong URL; muon du trace thi goi /api/traces/<id>
+#  - max_duration = block_retention: search qua 72h khong co y nghia vi block da bi xoa
+query_frontend:
+  search:
+    default_result_limit: 500
+    max_result_limit: 5000
+    max_duration: 72h
+
 compactor:
   compaction:
     block_retention: 72h
@@ -24,9 +39,9 @@ storage:
   trace:
     backend: local
     wal:
-      path: /tmp/tempo/wal
+      path: /var/tempo/wal
     local:
-      path: /tmp/tempo/blocks
+      path: /var/tempo/blocks
 
 usage_report:
   reporting_enabled: false
