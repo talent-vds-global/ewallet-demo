@@ -126,9 +126,10 @@ Lỗi #2 và #5 nằm chung nhánh `HELD` — một nhánh, hai vấn đề.
   - `OTEL_EXPORTER_OTLP_PROTOCOL=grpc`
 - Agent tự instrument: Spring MVC, WebClient/RestTemplate, JDBC (kèm `db.statement`), Kafka (producer/consumer, `messaging.*`), gRPC (`rpc.*`).
 - **Log JSON**: `logstash-logback-encoder`; agent tự chèn `trace_id` / `span_id` vào MDC.
-- **otel-collector** export song song: file `traces.jsonl` / `logs.jsonl` (đầu vào Trace Analyzer) + Jaeger + Tempo/Loki (Grafana, người xem).
+- **otel-collector** export song song: file `traces.jsonl` / `logs.jsonl` (đầu vào Trace Analyzer giai đoạn demo, xoay vòng 100/50 MB) + Jaeger + Tempo/Loki (Grafana; Tempo là nguồn trace của Trace Analyzer từ Stage F).
 - **call-logger** (extension của OTel agent, `otel-extensions/call-logger`): mỗi lời gọi giữa service bắn log `SERVICE_CALL` kèm `trace_id`. WebSocket tự mang `traceparent` trong frame. Xem `docs/logging.md`.
-- gRPC attribute (cho lỗi #6): bật `OTEL_INSTRUMENTATION_GRPC_CAPTURE_METADATA` / span attribute custom tối thiểu — ghi rõ đây là "knob" để demo thu context ngoài HTTP.
+- Lỗi #6 (gRPC bỏ qua `currency`): span gRPC không mang giá trị field trong body, và capture-metadata chỉ chép header nên không giúp được. Đường phát hiện đã chốt (2026-09-17): `LogFact` từ log `gRPC AuthorizePayment ... currency=USD` + `authorize thanh cong ... amountVnd=` cùng `trace_id`, cộng với edge tĩnh `ASSIGNS_LITERAL` — xem `collector-data-contract.md` §1 và §3.
+- Kafka header `x-attempt` được chép vào span (`-Dotel.instrumentation.messaging.experimental.capture-headers=x-attempt`) → attribute `messaging.header.x_attempt` để tách first_attempt / retry / dead_letter.
 
 ### Database context — `database-quality-library` (kế thừa Topic #80)
 

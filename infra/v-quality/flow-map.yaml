@@ -1,0 +1,133 @@
+# flow-map.yaml — cấu hình của Trace Analyzer (v-quality) cho hệ ewallet-demo.
+#
+# Trả lời 3 câu hỏi cho mỗi trace:
+#   1. Trace thuộc flow nào (primary)?          -> flows[].entries
+#   2. Có thêm nhãn phụ nào không (F4, F5)?     -> flows[].overlays
+#   3. Kết cục nghiệp vụ là gì (COMPLETED/HELD/...)? -> outcome
+#
+# Nguồn: slug ở docs/specs/F*.md · route ở ewallet-gateway application.yml,
+# WalletController (BFF) và OrderController (order) · dấu hiệu F4 ở F4-failure-refund.md §2.6.
+# Kiểm bằng: python scripts/flow-map-check.py  (báo route chưa được map, số trace mỗi flow).
+#
+# Lưu ý đã đo trên trace thật (2026-09-17):
+#  - Span SERVER của gateway có http.route = ID của route ("wallet", "orders-internal"), không phải
+#    template -> KHÔNG phân loại ở gateway. Dùng span SERVER đầu tiên của service phía sau.
+#  - ~87% trace trong file là trace nền chỉ có 1 span JDBC (db-quality-library phân tích định kỳ,
+#    poller outbox của notification) -> bỏ qua vì không có span cửa vào.
+#  - Span Kafka CONSUMER nằm CÙNG trace với request gốc (context đi theo header) -> F5 là nhãn phụ.
+
+version: 1
+system: ewallet-demo
+
+entry:
+  # Span dùng để phân loại: span kind=SERVER bắt đầu sớm nhất, bỏ qua các service dưới đây.
+  skip_services: [ewallet-gateway]
+  route_attribute: http.route          # template, vd /api/orders/{orderId}/refund
+  method_attribute: http.request.method
+  # Trace không có span SERVER nào ngoài skip_services nhưng có CONSUMER -> cửa vào là CONSUMER.
+  consumer_as_entry: true
+
+ignore:
+  # Trace không có span SERVER/CONSUMER nào (chỉ JDBC/INTERNAL) -> đếm vào "background", không vào flow.
+  without_entry_span: true
+  routes:
+    - /actuator/**
+    - /**/ping
+    - /api/trace-test
+    - /admin/**                        # UI demo + Ops đọc số dư/hạn mức/bút toán, không phải flow khách hàng
+    - /api/notifications/stream        # SSE mở kết nối dài; sự kiện thật nằm ở trace F5 của giao dịch
+    - /ws/**                           # bắt tay WebSocket third-party -> partner-sim lúc khởi động (kết nối dùng lại);
+                                       # bản tin WATCH/SETTLEMENT mang traceparent nên đã nằm trong trace F1/F2
+    - /v3/api-docs/**
+    - /swagger-ui/**
+
+flows:
+  - code: F1
+    slug: topup-partner
+    entries:
+      - {service: ewallet-business-customer-mobileapp, method: POST, route: /api/wallet/topup}
+
+  - code: F2
+    slug: bill-telco-payment
+    entries:
+      - {service: ewallet-business-customer-mobileapp, method: GET,  route: /api/wallet/bill}        # tra cứu hoá đơn
+      - {service: ewallet-business-customer-mobileapp, method: POST, route: /api/wallet/bill/pay}
+      - {service: ewallet-business-customer-mobileapp, method: POST, route: /api/wallet/telco/topup}
+      - {service: ewallet-payment-order,               method: GET,  route: /api/orders/bill-inquiry} # qua gateway /orders/**
+
+  - code: F3
+    slug: p2p-transfer
+    entries:
+      - {service: ewallet-business-customer-mobileapp, method: POST, route: /api/wallet/transfer}
+
+  - code: F4
+    slug: failure-refund
+    entries:
+      # F4d — Ops hoàn tiền chủ động (gateway /orders/{id}/refund -> order)
+      - {service: ewallet-payment-order, method: POST, route: "/api/orders/{orderId}/refund"}
+    overlays:
+      # Gắn thêm nhãn F4 cho trace của F1/F2/F3. Baseline của flow gốc PHẢI loại các trace này
+      # (F4 làm error_rate của F1/F2 tăng — F4-failure-refund.md §2.6).
+      - variant: F4a/F4c               # bù trừ sau khi đã giữ tiền (trace F4d cũng khớp — vô hại vì primary đã là F4)
+        when_span: {kind: CLIENT, attribute: rpc.method, equals: ReversePayment}
+      - variant: F4b                   # business từ chối ở S2, chưa giữ tiền
+        when_outcome: [REJECTED]
+
+  - code: F5
+    slug: async-notification
+    entries:
+      - {service: ewallet-notification, method: GET, route: /api/notifications}   # đọc danh sách thông báo (api-contracts §10.2)
+    overlays:
+      # Chỉ tính cây con bắt đầu từ span CONSUMER, không tính phần HTTP phía trước.
+      - variant: consume
+        when_span:
+          kind: CONSUMER
+          attribute: messaging.destination.name
+          in: [ewallet.payment.events]
+        scope: consumer_subtree
+      - variant: dead-letter
+        when_span:
+          kind: PRODUCER
+          attribute: messaging.destination.name
+          in: [ewallet.payment.events.DLT]
+        scope: consumer_subtree
+
+  - code: F6
+    slug: transaction-history
+    entries:
+      - {service: ewallet-business-customer-mobileapp, method: GET, route: /api/wallet/transactions}
+      - {service: ewallet-business-customer-mobileapp, method: GET, route: "/api/wallet/orders/{orderId}"}
+      - {service: ewallet-payment-order,               method: GET, route: /api/orders/history}
+      - {service: ewallet-payment-order,               method: GET, route: "/api/orders/{orderId}"}
+
+# Kết cục nghiệp vụ của giao dịch ghi (F1–F4): đọc mã HTTP của span SERVER POST /api/orders ở order
+# (OrderController.httpStatusOf). Không cần sửa code demo để biết nhánh HELD.
+outcome:
+  span: {service: ewallet-payment-order, kind: SERVER, method: POST, route: /api/orders}
+  attribute: http.response.status_code
+  map:
+    "200": COMPLETED
+    "202": HELD                        # R-REVIEW-01 — lỗi #2 và #5 nằm ở nhánh này
+    "422": REJECTED                    # R-BALANCE-01, R-LIMIT-01, R-AMOUNT-*
+    "502": FAILED_OR_REFUNDED          # đối tác từ chối -> bù trừ
+    "504": PARTNER_TIMEOUT             # R-COMP-08
+    "400": INVALID_REQUEST
+
+# Phân loại lần xử lý Kafka (docker-compose bật otel.instrumentation.messaging.experimental.capture-headers=x-attempt)
+attempts:
+  attribute: messaging.header.x_attempt   # kiểu string[], vd ["2"]
+  first_attempt_when: [missing, "1"]
+  dead_letter_topic_suffix: .DLT
+  message_key_attribute: messaging.kafka.message.key
+  # Retry được republish về CHÍNH topic gốc nên cả notification-cg lẫn order-status-cg đều nhận
+  # lần thử 2, 3 -> phải lọc first_attempt ở cả hai consumer group.
+
+baseline:
+  # BẮT BUỘC tách theo outcome: đo 2026-09-17, p95 AuthorizePayment gộp mọi nhánh = 432ms (< 500ms, trông ổn)
+  # nhưng riêng nhánh HELD = 776ms -> gộp chung thì lỗi #5 bị nhánh COMPLETED (p95 80ms) che mất.
+  group_by: [flow, outcome]
+  first_attempt_only: true
+  exclude_overlays_from_primary: [F4]
+  # Chờ span đến muộn (Kafka consumer, retry có backoff 1s x lần thử) trước khi coi trace là đủ.
+  late_span_wait_seconds: 60
+  window_minutes: 15

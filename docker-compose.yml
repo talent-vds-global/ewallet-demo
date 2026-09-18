@@ -24,12 +24,16 @@ x-otel-env: &otel-env
   # otel.javaagent.extensions: nap extension call-logger — moi lan service goi nhau (HTTP, gRPC,
   # Kafka, WebSocket) ban mot log SERVICE_CALL mang trace_id sang Loki. Jar do service
   # otel-ext-build dung roi dat vao volume otel-ext. Chi tiet: docs/logging.md
+  # capture-headers=x-attempt: ghi header retry cua notification vao span Kafka thanh attribute
+  # messaging.header.x_attempt -> Trace Analyzer tach first_attempt / retry / dead_letter.
+  # Thieu dong nay thi span Kafka khong mang so lan thu (agent mac dinh khong chep header).
   JAVA_TOOL_OPTIONS: >-
     -javaagent:/otel/opentelemetry-javaagent.jar
     -Dotel.javaagent.extensions=/otel/ext/call-logger.jar
     -XX:MaxRAMPercentage=50
     -XX:+UseSerialGC
     -Dotel.instrumentation.spring-data.enabled=false
+    -Dotel.instrumentation.messaging.experimental.capture-headers=x-attempt
 
 services:
   # ---------- Hạ tầng ----------
@@ -104,12 +108,27 @@ services:
     ports: ["13100:3100"]   # API Loki, de tra log bang curl / logcli
     mem_limit: 384m
 
+  # Tempo chay bang user 10001 nhung volume moi tao thuoc root -> chown mot lan roi thoat
+  # (cung cach vi du docker-compose chinh thuc cua Tempo).
+  tempo-init:
+    image: grafana/tempo:2.6.1
+    profiles: ["infra", "all"]
+    user: root
+    entrypoint: ["chown", "10001:10001", "/var/tempo"]
+    volumes:
+      - tempodata:/var/tempo
+
   tempo:
     image: grafana/tempo:2.6.1
     profiles: ["infra", "all"]
     command: ["-config.file=/etc/tempo/config.yaml"]
     volumes:
       - ./infra/tempo/tempo-config.yaml:/etc/tempo/config.yaml:ro
+      - tempodata:/var/tempo
+    ports: ["13200:3200"]   # API Tempo (/api/search, /api/traces/<id>) cho Trace Analyzer va curl
+    depends_on:
+      tempo-init:
+        condition: service_completed_successfully
     mem_limit: 384m
 
   grafana:
@@ -298,4 +317,5 @@ services:
 volumes:
   pgdata:
   lokidata:
+  tempodata:
   otel-ext:
