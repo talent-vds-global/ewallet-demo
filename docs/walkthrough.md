@@ -6,36 +6,9 @@
 
 Thời gian đi hết tài liệu này: **khoảng 20 phút**.
 
----
-
-## Bước 0 — Đưa Stage E lên GitHub
-
-Bạn đang mở GitHub Desktop. Repo `ewallet-demo` đang có các thay đổi chưa commit — phần lớn
-là công việc Stage E (test suite + JaCoCo):
-
-| Nhóm | Nội dung |
-|---|---|
-| 7 file `pom.xml` | thêm plugin JaCoCo 0.8.12 + `spring-boot-starter-test` |
-| 7 thư mục `src/test/` | 31 file test, 457 test case |
-| `docs/testing.md` | tài liệu test suite |
-| `scripts/coverage-report.py`, `run-tests.ps1`, `run-tests.sh` | công cụ đo độ phủ |
-| `docs/walkthrough.md` | tài liệu này |
-| `docker-compose.yml`, `docs/db-quality-integration.md` | sửa `calledFrom` của dashboard db-quality (xem sự cố cuối tài liệu) |
-| `README.md`, `docs/demo-status.md` | cập nhật trạng thái |
-
-Gợi ý commit message:
-
-```
-feat(test): Stage E - test suite 457 test, JaCoCo 86% do phu
-
-- JaCoCo 0.8.12 tren ca 7 service, bao cao XML + HTML
-- 457 unit test (JUnit 5 + Mockito + AssertJ), khong can Docker/DB
-- scripts/coverage-report.py gom bao cao nhieu service thanh mot bang
-- Loi co chu dich #3 hien thanh so do duoc: TopupAdapter 0% / 11 dong
-```
-
-> **Lưu ý:** thư mục `target/` (chứa `jacoco.xml`, `.class`) đã nằm trong `.gitignore` —
-> không commit. Báo cáo độ phủ được sinh lại mỗi lần chạy `mvn verify`.
+> **Mọi lệnh trong tài liệu này gõ ở Command Prompt (cmd.exe)**, đứng tại thư mục `ewallet-demo`.
+> Script `.ps1` được gọi qua `powershell -ExecutionPolicy Bypass -File ...`. Nếu gõ thẳng
+> `.\scripts\demo-flows.ps1` trong cmd, Windows sẽ **mở file bằng Notepad thay vì chạy nó**.
 
 ---
 
@@ -43,28 +16,29 @@ feat(test): Stage E - test suite 457 test, JaCoCo 86% do phu
 
 Cần **Docker Desktop đang chạy**. Toàn bộ stack chiếm khoảng **4 GB RAM** (đã cap heap JVM).
 
-```powershell
-cd D:\ViettelDigitalTalent\v-quality\ewallet-demo
+```cmd
+cd /d D:\ViettelDigitalTalent\v-quality\ewallet-demo
 docker compose --profile all up -d --build
 ```
 
 Lần đầu build mất vài phút. Chờ mọi container `healthy`:
 
-```powershell
+```cmd
 docker compose ps
 ```
 
-Nếu RAM máy eo hẹp, chạy riêng hạ tầng trước rồi mới bật service:
+Nếu RAM máy eo hẹp, chạy riêng hạ tầng trước (Postgres, Kafka, OTel, Jaeger, Grafana/Loki/Tempo,
+Adminer, Kafka console) rồi mới bật service:
 
-```powershell
-docker compose --profile infra up -d      # Postgres, Kafka, OTel, Jaeger, Grafana/Loki/Tempo, Adminer, Kafka console
+```cmd
+docker compose --profile infra up -d
 docker compose --profile all up -d
 ```
 
 **Kiểm tra nhanh mọi service còn sống:**
 
-```powershell
-.\scripts\demo-flows.ps1 -Flow smoke
+```cmd
+powershell -ExecutionPolicy Bypass -File scripts\demo-flows.ps1 -Flow smoke
 ```
 
 ---
@@ -76,8 +50,8 @@ Lúc mới lên, hệ thống **chưa có giao dịch nào** — mọi dashboard
 
 **Cách 1 — chạy toàn bộ 6 flow bằng script (khuyến nghị cho lần đầu):**
 
-```powershell
-.\scripts\demo-flows.ps1 -Flow all
+```cmd
+powershell -ExecutionPolicy Bypass -File scripts\demo-flows.ps1 -Flow all
 ```
 
 Script chạy lần lượt: smoke → F1 nạp tiền → F1 treo duyệt → F2 hoá đơn → F3 chuyển tiền →
@@ -168,8 +142,8 @@ Swagger UI trên từng service HTTP: `http://localhost:1808x/swagger-ui.html`
 
 ### Nhóm D — Độ phủ test (không cần Docker)
 
-```powershell
-.\scripts\run-tests.ps1
+```cmd
+powershell -ExecutionPolicy Bypass -File scripts\run-tests.ps1
 ```
 
 In ra bảng độ phủ 7 service, và mở được báo cáo HTML từng service tại
@@ -192,15 +166,17 @@ Mở Demo Console tab **"Lỗi cài sẵn"**, có 4 nút chạy thẳng kịch b
 
 **Lỗi #3 — khoảng trống test của F1** không xem bằng dashboard mà bằng báo cáo độ phủ:
 
-```powershell
-.\scripts\run-tests.ps1
+```cmd
+powershell -ExecutionPolicy Bypass -File scripts\run-tests.ps1
 ```
 
 Nhìn phần "LOP CHUA CO TEST CHAM TOI": `TopupAdapter` **0% / 11 dòng**, trong khi `BillAdapter`
 và `TelcoAdapter` ngay bên cạnh đều **100%**. Kiểm chứng thêm:
 
-```bash
-grep -rl "TOP_UP" */src/test/java/     # không ra kết quả nào
+Lệnh dưới đây tìm `TOP_UP` trong mọi file test và **không ra kết quả nào**:
+
+```cmd
+findstr /s /m "TOP_UP" *.java | findstr "\\src\\test\\"
 ```
 
 Nhưng flow F1 **vẫn chạy thật và vẫn sinh trace** — đó chính là điểm mấu chốt:
@@ -210,9 +186,16 @@ có runtime, không có test. Chỉ lộ ra khi đối chiếu trace với cover
 
 ## Bước 5 — Dọn dẹp
 
-```powershell
-docker compose --profile all down          # dừng, giữ dữ liệu
-docker compose --profile all down -v       # dừng và xoá sạch database
+Dừng, giữ dữ liệu:
+
+```cmd
+docker compose --profile all down
+```
+
+Dừng và xoá sạch database:
+
+```cmd
+docker compose --profile all down -v
 ```
 
 ---
@@ -223,10 +206,11 @@ docker compose --profile all down -v       # dừng và xoá sạch database
 |---|---|---|
 | Demo Console báo **"không kết nối được gateway"** dù `curl localhost:18080/actuator/health` trả 200 | `globalcors` của gateway chỉ áp cho route, không áp cho `/actuator/**` — trình duyệt chặn đọc response vì thiếu `Access-Control-Allow-Origin` | Đã xử lý: `management.endpoints.web.cors` trong `ewallet-gateway/application.yml`. Nếu vẫn thấy lỗi thì build lại gateway (`docker compose --profile all up -d --build ewallet-gateway`) rồi tải lại trang bằng Ctrl+F5 |
 | Cổng 8080 bị chiếm | `AgentService` của máy chiếm sẵn | Gateway đã đổi sang **18080**, dùng cổng này |
-| `traces.jsonl` rỗng | chưa chạy giao dịch nào | Chạy `.\scripts\demo-flows.ps1 -Flow all` |
+| `traces.jsonl` rỗng | chưa chạy giao dịch nào | Chạy `powershell -ExecutionPolicy Bypass -File scripts\demo-flows.ps1 -Flow all` |
+| Gõ `.\scripts\demo-flows.ps1` thì **Notepad mở ra**, không có output | Đang ở cmd.exe — cmd không chạy được `.ps1`, nên giao file cho ứng dụng mặc định là Notepad | Gọi qua `powershell -ExecutionPolicy Bypass -File scripts\...ps1` như trong tài liệu |
 | Service chết khi chạy trên host (không Docker) | JVM báo timezone `Asia/Saigon`, Postgres không hiểu | Thêm `-Duser.timezone=Asia/Ho_Chi_Minh` |
 | db-quality trả `HikariDataSource (null) has been closed` | chạy nhiều service trên host, tranh cổng 9876 | Chạy bằng Docker |
-| Kafka CLI trong container trả rỗng | Git Bash đổi đường dẫn | Đặt `MSYS_NO_PATHCONV=1` trước lệnh |
+| Kafka CLI trong container trả rỗng | Git Bash đổi đường dẫn | Chạy lệnh từ cmd (không bị lỗi này), hoặc trong Git Bash thì đặt `MSYS_NO_PATHCONV=1` trước lệnh |
 | Máy chậm / hết RAM | 7 service + Kafka ~4 GB | Chạy `--profile infra` trước, rồi bật dần |
 | `calledFrom` của db-quality toàn trỏ vào `io.opentelemetry.javaagent...` | OTel agent chèn interceptor vào call stack | Đã xử lý: `-Dotel.instrumentation.spring-data.enabled=false` trong compose — xem [`db-quality-integration.md`](db-quality-integration.md) §5b |
 | Dashboard db-quality có nhiều `N_PLUS_ONE` | heuristic đếm theo cửa sổ thu, không theo từng request | Chỉ finding ở `OrderHistoryService:67` là lỗi #4 thật; xem §5b |
