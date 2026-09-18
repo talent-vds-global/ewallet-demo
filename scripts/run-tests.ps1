@@ -32,13 +32,19 @@ if ($Service) {
     }
 }
 
-# Maven: uu tien mvn tren PATH, khong co thi dung wrapper cua service.
+# Maven: uu tien mvn tren PATH, khong co thi dung ban Maven wrapper da tai ve ~/.m2/wrapper.
 $mvn = (Get-Command mvn -ErrorAction SilentlyContinue)
-if ($mvn) { $mvnCmd = $mvn.Source } else { $mvnCmd = $null }
+if ($mvn) {
+    $mvnCmd = $mvn.Source
+} else {
+    $mvnCmd = Get-ChildItem "$env:USERPROFILE\.m2\wrapper\dists\apache-maven-*\*\bin\mvn.cmd" -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+    if ($mvnCmd) { Write-Host "Khong co 'mvn' tren PATH, dung: $mvnCmd" -ForegroundColor DarkGray }
+}
 
 if (-not $SkipBuild) {
     if (-not $mvnCmd) {
-        Write-Error "Khong tim thay 'mvn' tren PATH. Cai Maven hoac them vao PATH roi chay lai."
+        Write-Error "Khong tim thay 'mvn' tren PATH lan trong ~/.m2/wrapper. Cai Maven hoac them vao PATH roi chay lai."
     }
 
     $failed = @()
